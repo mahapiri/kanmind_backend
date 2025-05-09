@@ -18,3 +18,8 @@ class ProfilRegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError({"passwords": "The passwords do not match!"})
         data.pop("repeated_password")
         return data
+    
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=255)
+    password = serializers.CharField(write_only=True, min_length=8)
