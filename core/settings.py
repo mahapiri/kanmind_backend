@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from django.conf.global_settings import STATICFILES_DIRS
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -44,6 +45,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'user_auth_app',
+    'task_app',
+    'board_app',
 ]
 
 MIDDLEWARE = [
@@ -58,20 +61,14 @@ MIDDLEWARE = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-
     'http://127.0.0.1:4200',
-
     'http://localhost:4200',
-
 ]
 
 
 CORS_ALLOWED_ORIGINS = [
-
     'http://127.0.0.1:4200',
-
     'http://localhost:4200',
-
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -141,6 +138,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
