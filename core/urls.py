@@ -22,5 +22,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('api/', include('user_auth_app.api.urls')),
+    path('api/boards/', include('board_app.api.urls')),
+
+
+
+
     re_path(r'favicon\.ico$', RedirectView.as_view(url='/static/favicon.svg', permanent=True)),
 ]
