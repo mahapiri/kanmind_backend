@@ -1,0 +1,14 @@
+from django.contrib.auth.models import User
+from rest_framework import serializers
+
+
+class ProfilRegistrationSerializer(serializers.Serializer):
+    fullname = serializers.CharField(max_length=255)
+    email = serializers.EmailField(max_length=255)
+    password = serializers.CharField(write_only=True, min_length=8)
+    repeated_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("This email address already exist!")
+        return value
