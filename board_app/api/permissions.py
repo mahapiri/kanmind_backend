@@ -1,17 +1,17 @@
-from rest_framework import authentication, exceptions
-from rest_framework.authtoken.models import Token
+from rest_framework import permissions
 
 
-class BoardOwnerAuthentication(authentication.BaseAuthentication):
-    pass
-    # def authenticate(self, request):
-    #     token = request.META.get("Token")
-    #     if not token:
-    #         return None
+class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
+    message = "Not allowd to see boards"
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+
+        if not user.is_authenticated:
+            return False
         
-    #     try:
-    #         user = Token.objects.get(key=token)
-    #     except Token.DoesNotExist:
-    #         raise exceptions.AuthenticationFailed('No user found!')
-        
-    #     return (user, None)
+        is_owner = obj.owner_id == user
+        is_member = user in obj.members.all()
+
+        return is_owner or is_member
+
