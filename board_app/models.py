@@ -6,11 +6,9 @@ from user_auth_app.models import Profile
 
 
 class Board(models.Model):
-    # id = models.BigAutoField(primary_key=True)
     title = models.CharField(max_length=255)
     owner_id = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="boards")
     members = models.ManyToManyField(Profile, blank=True,related_name="member_boards")
-    tasks = models.ManyToManyField('task_app.Task', blank=True, related_name="board_tasks")
 
     class Meta:
         verbose_name = "Board"

@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from board_app.api.permissions import BoardOwnerOrMemberAuthentication
 from board_app.api.serializers import BoardSerializer
 from board_app.models import Board
+from task_app.models import Task
 from user_auth_app.models import Profile
 
 
@@ -20,22 +21,20 @@ class BoardListView(generics.ListAPIView):
             models.Q(owner_id=profile) | models.Q(members=profile)
         ).distinct()
 
-        data = []
         for board in boards:
-            tasks = board.tasks.all() 
-            tasks_to_do_count = tasks.filter(status="to-do").count()
-            print(tasks.filter(status="to-do"))
-            tasks_high_prio_count = tasks.filter(priority="high").count()
-
-            data.append({
-                "id": board.id,
-                "title": board.title,
-                "member_count": board.members.count(),
-                "ticket_count": tasks.count(), 
-                "tasks_to_do_count": tasks_to_do_count,
-                "tasks_high_prio_count": tasks_high_prio_count,
-                "owner_id": board.owner_id.id,
-            })
-
+            data = self.setBoardView(board)
         return Response(data)
-    
+
+    def setBoardView(self, board):
+        tasks = Task.objects.filter(board=board)
+        data = []
+        data.append({
+            "id": board.id,
+            "title": board.title,
+            "member_count": board.members.count(),
+            "ticket_count": tasks.count(),
+            "tasks_to_do_count": tasks.filter(status="to-do").count(),
+            "tasks_high_prio_count": tasks.filter(priority="high").count(),
+            "owner_id": board.owner_id.id,
+        })
+        return data

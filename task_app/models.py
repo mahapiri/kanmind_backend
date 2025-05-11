@@ -17,7 +17,6 @@ STATUS_PRIORITY = {
 }
 
 class Comment(models.Model):
-    # id = models.BigAutoField(primary_key=True)
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="comments")
     content = models.CharField(max_length=255)
@@ -32,8 +31,7 @@ class Comment(models.Model):
 
 
 class Task(models.Model):
-    # id = models.BigAutoField(primary_key=True)
-    board = models.ForeignKey("board_app.Board", on_delete=models.CASCADE, related_name="task_set")
+    board = models.ForeignKey("board_app.Board", on_delete=models.CASCADE, related_name="tasks")
     title = models.CharField(max_length=255)
     description = models.TextField(max_length=500, blank=True)
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
