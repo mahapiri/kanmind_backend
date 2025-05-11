@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
+from board_app.models import Profile
+
 
 class ProfilRegistrationSerializer(serializers.Serializer):
     fullname = serializers.CharField(max_length=255)
@@ -23,3 +25,16 @@ class ProfilRegistrationSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
     password = serializers.CharField(write_only=True, min_length=8)
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    email = serializers.SerializerMethodField()
+
+    class Meta: 
+        model = Profile
+        fields = ['id', 'email', 'fullname']
+
+    def get_email(self, obj):
+        if obj.user:
+            return obj.user.email
+        return None

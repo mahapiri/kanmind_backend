@@ -1,13 +1,14 @@
 from django.db import models
 from rest_framework import generics, status
-from rest_framework import permissions
+from rest_framework import viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed, MethodNotAllowed
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import viewsets
 
 from board_app.api.permissions import BoardOwnerOrMemberAuthentication
-from board_app.api.serializers import BoardReadSerializer, BoardWriteSerializer
+from board_app.api.serializers import BoardReadSerializer, BoardSerializer, BoardWriteSerializer
 from board_app.models import Board
 from task_app.models import Task
 from user_auth_app.models import Profile
@@ -79,3 +80,24 @@ class BoardListView(generics.ListAPIView):
             return token.user_id
         except Token.DoesNotExist:
             raise AuthenticationFailed("Invalid Token!")
+        
+class BoardDetailView(viewsets.ModelViewSet):
+    queryset = Board.objects.all()
+    serializer_class = BoardSerializer
+    permission_classes = [AllowAny]
+
+    # def list(self, request, *args, **kwargs):
+    #     user = request.user
+    #     boards = Board.objects.filter(
+    #         owner=user.profile
+    #     ) | Board.objects.filter(
+    #         members__in=[user.profile]
+    #     ).distinct()
+
+    #     serializer = self.get_serializer(boards, many=True)
+    #     return Response(serializer.data)
+    
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

@@ -2,6 +2,8 @@ from rest_framework import serializers
 from rest_framework.response import Response
 
 from board_app.admin import Board
+from task_app.api.serializer import TaskSerializer
+from user_auth_app.api.serializers import MemberSerializer
 from user_auth_app.models import Profile
 
 
@@ -41,3 +43,10 @@ class BoardWriteSerializer(serializers.ModelSerializer):
             return Response({
                 "error": "Internal Server error!"
             })
+        
+class BoardSerializer(serializers.ModelSerializer):
+    tasks = TaskSerializer(many=True, read_only=True)
+    members = MemberSerializer(many=True, read_only=True)
+    class Meta:
+        model = Board
+        fields = ['id', 'title', 'owner_id', 'members', 'tasks']
