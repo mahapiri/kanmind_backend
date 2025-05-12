@@ -1,7 +1,10 @@
+import itertools
 from rest_framework import generics, status
 from rest_framework.response import Response
+from rest_framework import viewsets
 
-from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication
+from board_app.models import Board
+from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication, isMemberOfBoardAuthentication
 from task_app.api.serializer import TaskSerializer
 from task_app.models import Task
 from user_auth_app.models import Profile
@@ -45,3 +48,91 @@ class ReviewerView(generics.GenericAPIView):
 
         serializer = TaskSerializer(tasks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TaskView(viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+    permission_classes = [isMemberOfBoardAuthentication]
+
+    def get_queryset(self):
+        user = self.request.user
+        user_profile = Profile.objects.get(user=user)
+        owned_boards = Board.objects.filter(owner_id=user_profile)
+        member_boards = user_profile.member_boards.all()
+        boards = owned_boards | member_boards
+        return Task.objects.filter(board__in=boards).distinct()
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        user_profile = Profile.objects.get(user=user)
+
+        board_id = request.data.get('board')
+
+        try:
+            board = Board.objects.get(pk=board_id)
+
+            is_owner = board.owner_id == user_profile
+            is_member = user_profile.member_boards.filter(id=board_id).exists()
+
+            if not (is_owner or is_member):
+                return Response({
+                    'error': 'Not authorized to create a task for this board!'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            assignees = self.request.data.get('assignee_id', [])
+            if assignees and not isinstance(assignees, list):
+                assignees = [assignees]
+
+            for assignee in assignees:
+                try:
+                    profile = Profile.objects.get(id=assignee)
+                    is_board_member = board.owner_id == profile or profile.member_boards.filter(
+                        id=board_id).exists()
+                    if not is_board_member:
+                        return Response({
+                            'error': f"Assignee with ID {assignee} does not exist!"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                except Profile.DoesNotExist:
+                    return Response({
+                        'error': f'Profil with ID {assignee} does not exist!'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            reviewers = self.request.data.get('reviewer_id', [])
+            if reviewers and not isinstance(reviewers, list):
+                reviewers = [reviewers]
+
+            for reviewer in reviewers:
+                try:
+                    profile = Profile.objects.get(id=reviewer)
+                    is_board_member = board.owner_id == profile or profile.member_boards.filter(
+                        id=board_id).exists()
+                    if not is_board_member:
+                        return Response({
+                            'error': f"Reviewer with ID {reviewer} does not exist!"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                except Profile.DoesNotExist:
+                    return Response({
+                        'error': f'Profil with ID {reviewer} does not exist!'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            task = serializer.save()
+
+            for assignee in assignees:
+                profile = Profile.objects.get(id=assignee)
+                task.assignee.add(profile)
+
+            for reviewer in reviewers:
+                profile = Profile.objects.get(id=reviewer)
+                task.assignee.add(profile)
+
+            task.owner_id.add(user_profile)
+
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+        except Board.DoesNotExist:
+            return Response({
+                'error': 'Board does not exist!'
+            }, status=status.HTTP_404_NOT_FOUND)

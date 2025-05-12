@@ -12,7 +12,7 @@ STATUS_CHOICES = {
 
 STATUS_PRIORITY = {
     "low": "low",
-    "mediium": "medium",
+    "medium": "medium",
     "high": "high"
 }
 
