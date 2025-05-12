@@ -2,13 +2,15 @@ from django.db import models
 from rest_framework import generics, status
 from rest_framework import viewsets
 from rest_framework.authtoken.models import Token
+from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import AuthenticationFailed, MethodNotAllowed
+from rest_framework.fields import ObjectDoesNotExist
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets
 
-from board_app.api.permissions import BoardOwnerOrMemberAuthentication
-from board_app.api.serializers import BoardReadSerializer, BoardSerializer, BoardWriteSerializer
+from board_app.api.permissions import BoardOwnerAuthentication, BoardOwnerOrMemberAuthentication
+from board_app.api.serializers import BoardReadSerializer, BoardSerializer, BoardUpdateSerializer, BoardWriteSerializer
 from board_app.models import Board
 from task_app.models import Task
 from user_auth_app.models import Profile
@@ -80,24 +82,75 @@ class BoardListView(generics.ListAPIView):
             return token.user_id
         except Token.DoesNotExist:
             raise AuthenticationFailed("Invalid Token!")
-        
+
+
 class BoardDetailView(viewsets.ModelViewSet):
     queryset = Board.objects.all()
-    serializer_class = BoardSerializer
-    permission_classes = [AllowAny]
 
-    # def list(self, request, *args, **kwargs):
-    #     user = request.user
-    #     boards = Board.objects.filter(
-    #         owner=user.profile
-    #     ) | Board.objects.filter(
-    #         members__in=[user.profile]
-    #     ).distinct()
-
-    #     serializer = self.get_serializer(boards, many=True)
-    #     return Response(serializer.data)
-    
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        members_data = request.data.pop('members', None)
+
+        serializer = BoardUpdateSerializer(
+            instance, data=request.data, partial=partial, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        try:
+            board = serializer.save()
+        except Exception as e:
+            return Response({
+                'error': 'Board was not found!'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if members_data is not None:
+            try:
+                valid_members = []
+                invalid_members = []
+
+                for member_id in members_data:
+                    try:
+                        profile = Profile.objects.get(id=member_id)
+                        valid_members.append(profile)
+                    except ObjectDoesNotExist:
+                        invalid_members.append(member_id)
+
+                if invalid_members:
+                    return Response({
+                        'error': 'Some member are invalid.',
+                        'invalid_members': invalid_members
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                board.members.set(members_data)
+
+            except Exception as e:
+                return Response({
+                    'error': 'Board is not found.'
+                })
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def get_serializer_class(self):
+        if self.request.method in ['PATCH', 'PUT']:
+            return BoardUpdateSerializer
+        return BoardSerializer
+
+    def get_permissions(self):
+        if self.action == 'destroy':
+            permission_classes = [BoardOwnerAuthentication]
+        else:
+            permission_classes = [BoardOwnerOrMemberAuthentication]
+        return [permission() for permission in permission_classes]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(None, status=status.HTTP_204_NO_CONTENT)
+
+    def perform_destroy(self, instance):
+        instance.delete()

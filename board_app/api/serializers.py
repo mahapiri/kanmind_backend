@@ -1,4 +1,6 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
+from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 
 from board_app.admin import Board
@@ -43,10 +45,43 @@ class BoardWriteSerializer(serializers.ModelSerializer):
             return Response({
                 "error": "Internal Server error!"
             })
-        
+
+
 class BoardSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
     members = MemberSerializer(many=True, read_only=True)
+
     class Meta:
         model = Board
         fields = ['id', 'title', 'owner_id', 'members', 'tasks']
+
+
+class BoardUpdateSerializer(serializers.ModelSerializer):
+    owner_data = serializers.SerializerMethodField(read_only=True)
+    members_data = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Board
+        fields = ['id', 'title', 'owner_data', 'members_data']
+
+    def get_owner_data(self, obj):
+        try:
+            owner_user = obj.owner_id
+            user_profile = User.objects.get(pk=owner_user.id)
+            owner_profile = Profile.objects.get(user=user_profile)
+
+            return {
+                'id': owner_profile.id,
+                'email': user_profile.email,
+                'fullname': owner_profile.fullname
+            }
+        except Profile.DoesNotExist:
+            return None
+
+
+    def get_members_data(self, obj):
+        return [{
+            'id': member.id,
+            'email': member.user.email,
+            'fullname': member.fullname
+        } for member in obj.members.all()]
