@@ -1,4 +1,6 @@
 import itertools
+from django.conf.locale import he
+from django.db.models import query
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework import viewsets
@@ -60,7 +62,8 @@ class TaskView(viewsets.ModelViewSet):
         owned_boards = Board.objects.filter(owner_id=user_profile)
         member_boards = user_profile.member_boards.all()
         boards = owned_boards | member_boards
-        return Task.objects.filter(board__in=boards).distinct()
+        queryset = Task.objects.filter(board__in=boards).distinct()
+        return queryset
 
     def create(self, request, *args, **kwargs):
         user = request.user
@@ -112,7 +115,7 @@ class TaskView(viewsets.ModelViewSet):
                         }, status=status.HTTP_400_BAD_REQUEST)
                 except Profile.DoesNotExist:
                     return Response({
-                        'error': f'Profil with ID {reviewer} does not exist!'
+                        'error': f'Profile with ID {reviewer} does not exist!'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = self.get_serializer(data=request.data)
@@ -136,3 +139,81 @@ class TaskView(viewsets.ModelViewSet):
             return Response({
                 'error': 'Board does not exist!'
             }, status=status.HTTP_404_NOT_FOUND)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        # user = request.user
+        # user_profile = Profile.objects.get(user=user)
+
+        task = Task.objects.filter(pk=instance.pk)
+        board_id = task[0].board.pk
+        board = Board.objects.get(pk=board_id)
+
+        assignees = self.request.data.get('assignee_id', [])
+        print(assignees)
+        if assignees and not isinstance(assignees, list):
+            assignees = [assignees]
+        elif not assignees:
+            assignees = []
+
+        for assignee in assignees:
+            try:
+                profile = Profile.objects.get(id=assignee)
+                is_board_member = board.owner_id == profile or profile.member_boards.filter(
+                    id=board_id).exists()
+                if not is_board_member:
+                    return Response({
+                        'error': f"Reviewer with ID {assignee} does not exist!"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except Profile.DoesNotExist:
+                return Response({
+                    'error': f"Profile with ID {assignee} does not exist!"
+                })
+
+        reviewers = self.request.data.get('reviewer_id', [])
+        if reviewers and not isinstance(reviewers, list):
+            reviewers = [reviewers]
+
+        for reviewer in reviewers:
+            try:
+                profile = Profile.objects.get(id=reviewer)
+                is_board_member = board.owner_id == profile or profile.member_boards.filter(
+                    id=board_id).exists()
+                if not is_board_member:
+                    return Response({
+                        'error': f"Reviewer with ID {reviewer} does not exist!"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except Profile.DoesNotExist:
+                return Response({
+                    'error': f"Profile with ID {reviewer} does not exist!"
+                })
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        try:
+            task = serializer.save()
+        except Exception as e:
+            return Response({
+                'error': 'Task was not found!'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        task.assignee.clear()
+        for assignee in assignees:
+            profile = Profile.objects.get(id=assignee)
+            task.assignee.add(profile)
+
+        task.reviewer.clear()
+        for reviewer in reviewers:
+            profile = Profile.objects.get(id=reviewer)
+            all_reviewer = task.reviewer.all()
+            all_reviewer.delete()
+            task.reviewer.add(profile)
+
+
+        # task.owner_id.add(user_profile)
+
+        headers = self.get_success_headers(serializer.data)
+
+        return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
