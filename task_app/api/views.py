@@ -8,8 +8,8 @@ from rest_framework import viewsets
 
 from board_app.models import Board
 from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication, isMemberOfBoardAuthentication, isOwnerOfBoard, isOwnerOfTask
-from task_app.api.serializer import TaskSerializer
-from task_app.models import Task
+from task_app.api.serializer import CommentSerializer, TaskSerializer
+from task_app.models import Comment, Task
 from user_auth_app.models import Profile
 
 
@@ -232,3 +232,24 @@ class TaskView(viewsets.ModelViewSet):
     
     def perform_destroy(self, instance):
         instance.delete()
+
+
+class CommentListView(viewsets.ModelViewSet):
+    serializer_class = CommentSerializer
+    permission_classes = [isMemberOfBoardAuthentication]
+
+    def get_queryset(self):
+        user = self.request.user
+        user_profile = Profile.objects.get(user=user)
+        owned_boards = Board.objects.filter(owner_id=user_profile)
+        member_boards = user_profile.member_boards.all()
+        boards = owned_boards | member_boards
+        comments = Comment.objects.filter(task__board__in=boards)
+        return comments
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = CommentSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    

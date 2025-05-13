@@ -51,7 +51,7 @@ class Comment(models.Model):
     class Meta:
         verbose_name = "Comment"
         verbose_name_plural = "Comments"
-        ordering = ["author"]
+        ordering = ["created_at"]
 
     def __str__(self):
         return f"{self.author} Comment: {self.content}"
