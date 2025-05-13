@@ -1,4 +1,5 @@
 import itertools
+from types import NoneType
 from django.conf.locale import he
 from django.db.models import query
 from rest_framework import generics, status
@@ -64,14 +65,14 @@ class TaskView(viewsets.ModelViewSet):
         boards = owned_boards | member_boards
         queryset = Task.objects.filter(board__in=boards).distinct()
         return queryset
-    
+
     def get_permissions(self):
         if self.request.method == 'DELETE':
             permission_classes = [isOwnerOfTask, isOwnerOfBoard]
-        else: 
+        else:
             permission_classes = [isMemberOfBoardAuthentication]
         return [permission() for permission in permission_classes]
-    
+
     def create(self, request, *args, **kwargs):
         user = request.user
         user_profile = Profile.objects.get(user=user)
@@ -90,8 +91,11 @@ class TaskView(viewsets.ModelViewSet):
                 }, status=status.HTTP_403_FORBIDDEN)
 
             assignees = self.request.data.get('assignee_id', [])
+            print(assignees)
             if assignees and not isinstance(assignees, list):
                 assignees = [assignees]
+            elif assignees is None:
+                assignees = []
 
             for assignee in assignees:
                 try:
@@ -110,6 +114,8 @@ class TaskView(viewsets.ModelViewSet):
             reviewers = self.request.data.get('reviewer_id', [])
             if reviewers and not isinstance(reviewers, list):
                 reviewers = [reviewers]
+            elif reviewers is None:
+                reviewers = []
 
             for reviewer in reviewers:
                 try:
@@ -218,7 +224,6 @@ class TaskView(viewsets.ModelViewSet):
             all_reviewer.delete()
             task.reviewer.add(profile)
 
-
         # task.owner_id.add(user_profile)
 
         headers = self.get_success_headers(serializer.data)
@@ -229,7 +234,7 @@ class TaskView(viewsets.ModelViewSet):
         instance = self.get_object()
         self.perform_destroy(instance)
         return Response(None, status=status.HTTP_204_NO_CONTENT)
-    
+
     def perform_destroy(self, instance):
         instance.delete()
 
@@ -246,10 +251,48 @@ class CommentListView(viewsets.ModelViewSet):
         boards = owned_boards | member_boards
         comments = Comment.objects.filter(task__board__in=boards)
         return comments
-    
+
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = CommentSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        user_profile = Profile.objects.get(user=user)
+        task_id = self.kwargs.get('pk')
+
+        try:
+            task = Task.objects.get(pk=task_id)
+        except Task.DoesNotExist:
+            return Response({
+                'error': 'The task does not exist!'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        serializer.save(task=task, author=user_profile)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def get_object(self):
+        comment_id = self.kwargs.get('comment_id')
+        task_id = self.kwargs.get('pk')
+
+        if comment_id:
+            queryset = self.filter_queryset(self.get_queryset())
+            obj = generics.get_object_or_404(
+                queryset, pk=comment_id, task=task_id)
+
+            self.check_object_permissions(self.request, obj)
+            return obj
+        return super().get_object()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(None, status=status.HTTP_204_NO_CONTENT)
+
+    def perform_destroy(self, instance):
+        instance.delete()
