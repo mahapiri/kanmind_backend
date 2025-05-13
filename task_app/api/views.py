@@ -2,11 +2,12 @@ import itertools
 from django.conf.locale import he
 from django.db.models import query
 from rest_framework import generics, status
+from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from rest_framework import viewsets
 
 from board_app.models import Board
-from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication, isMemberOfBoardAuthentication
+from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication, isMemberOfBoardAuthentication, isOwnerOfBoard, isOwnerOfTask
 from task_app.api.serializer import TaskSerializer
 from task_app.models import Task
 from user_auth_app.models import Profile
@@ -54,7 +55,6 @@ class ReviewerView(generics.GenericAPIView):
 
 class TaskView(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
-    permission_classes = [isMemberOfBoardAuthentication]
 
     def get_queryset(self):
         user = self.request.user
@@ -64,7 +64,14 @@ class TaskView(viewsets.ModelViewSet):
         boards = owned_boards | member_boards
         queryset = Task.objects.filter(board__in=boards).distinct()
         return queryset
-
+    
+    def get_permissions(self):
+        if self.request.method == 'DELETE':
+            permission_classes = [isOwnerOfTask, isOwnerOfBoard]
+        else: 
+            permission_classes = [isMemberOfBoardAuthentication]
+        return [permission() for permission in permission_classes]
+    
     def create(self, request, *args, **kwargs):
         user = request.user
         user_profile = Profile.objects.get(user=user)
@@ -217,3 +224,11 @@ class TaskView(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
 
         return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(None, status=status.HTTP_204_NO_CONTENT)
+    
+    def perform_destroy(self, instance):
+        instance.delete()

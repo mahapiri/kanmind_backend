@@ -56,3 +56,33 @@ class isMemberOfBoardAuthentication(IsAuthenticated):
             return is_owner or is_member
         except Profile.DoesNotExist:
             return False
+
+class isOwnerOfTask(IsAuthenticated):
+    message = "Not authorized. You are not a member of this task"
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        
+        user = request.user
+        try: 
+            user_profile = Profile.objects.get(user=user)
+            is_owner = user_profile.own_tasks.exists()
+            return is_owner
+        except Profile.DoesNotExist:
+            return False
+        
+class isOwnerOfBoard(IsAuthenticated):
+    message = "Not authorized. You are not a owner of the board"
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        
+        user = request.user
+        try: 
+            user_profile = Profile.objects.get(user=user)
+            is_owner = user_profile.boards.exists()
+            return is_owner
+        except Profile.DoesNotExist:
+            return False
