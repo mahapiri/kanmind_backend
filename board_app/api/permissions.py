@@ -1,6 +1,5 @@
 from rest_framework import permissions
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.response import Response
 
 from board_app.models import Profile
 
@@ -17,7 +16,6 @@ class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
 
         if not (is_owner or is_member):
             raise AuthenticationFailed()
-
         return True
 
 
@@ -31,5 +29,4 @@ class BoardOwnerAuthentication(permissions.BasePermission):
 
         if not is_owner:
             raise AuthenticationFailed()
-
         return is_owner

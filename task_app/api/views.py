@@ -1,57 +1,56 @@
-import itertools
-from types import NoneType
-from django.conf.locale import he
-from django.db.models import query
 from rest_framework import generics, status
-from rest_framework.decorators import permission_classes
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets
 
-from board_app.models import Board
-from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication, isMemberOfBoardAuthentication, isOwnerOfBoard, isOwnerOfTask
-from task_app.api.serializers import CommentSerializer, TaskSerializer
-from task_app.models import Comment, Task
 from user_auth_app.models import Profile
+from task_app.models import Comment, Task
+from board_app.models import Board
+from task_app.api.permissions import BoardOwnerOrMemberAuthentication, TaskOwnerAuthentication, BoardOwnerAuthentication
+from task_app.api.serializers import CommentSerializer, TaskSerializer
 
 
 class AssignedToMeView(generics.GenericAPIView):
     serializer_class = TaskSerializer
-    permission_classes = [IsAssigneeAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self):
         user = self.request.user
-        user_profile = Profile.objects.get(user=user)
-        return user_profile
+        profile = Profile.objects.get(user=user)
+        return profile
 
     def get(self, request, *args, **kwargs):
-        profile = self.get_object()
-        assigned_tasks = profile.assigned_tasks.all()
-        tasks = []
-        for assigned_task in assigned_tasks:
-            tasks.append(Task.objects.get(pk=assigned_task.id))
-
-        serializer = TaskSerializer(tasks, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        try:
+            profile = self.get_object()
+            assigned_tasks = profile.assigned_task.all()
+            serializer = TaskSerializer(assigned_tasks, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except AuthenticationFailed:
+            return Response({"error": "Not authorized. You should be logged in to see the tasks!"}, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception:
+            return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ReviewerView(generics.GenericAPIView):
     serializer_class = TaskSerializer
-    permission_classes = [IsReviewerAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self):
         user = self.request.user
-        user_profile = Profile.objects.get(user=user)
-        return user_profile
+        profile = Profile.objects.get(user=user)
+        return profile
 
     def get(self, request, *args, **kwargs):
-        profile = self.get_object()
-        reviewer_tasks = profile.reviewer_tasks.all()
-        tasks = []
-        for reviewer_task in reviewer_tasks:
-            tasks.append(Task.objects.get(pk=reviewer_task.id))
-
-        serializer = TaskSerializer(tasks, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        try:
+            profile = self.get_object()
+            reviewer_tasks = profile.reviewer_task.all()
+            serializer = TaskSerializer(reviewer_tasks, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except AuthenticationFailed:
+            return Response({"error": "Not authorized. You should be logged in to see the tasks!"}, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception:
+            return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TaskView(viewsets.ModelViewSet):
@@ -68,9 +67,9 @@ class TaskView(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.request.method == "DELETE":
-            permission_classes = [isOwnerOfTask, isOwnerOfBoard]
+            permission_classes = [IsAuthenticated, TaskOwnerAuthentication, BoardOwnerAuthentication]
         else:
-            permission_classes = [isMemberOfBoardAuthentication]
+            permission_classes = [IsAuthenticated, BoardOwnerOrMemberAuthentication]
         return [permission() for permission in permission_classes]
 
     def create(self, request, *args, **kwargs):
@@ -239,7 +238,7 @@ class TaskView(viewsets.ModelViewSet):
 
 class CommentListView(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
-    permission_classes = [isMemberOfBoardAuthentication]
+    # permission_classes = [isMemberOfBoardAuthentication] /// isMemberOfBoardAuthentication
 
     def get_queryset(self):
         user = self.request.user

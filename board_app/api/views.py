@@ -38,7 +38,7 @@ class BoardListView(generics.ListAPIView):
             response_serializer = BoardReadSerializer(response_data, many=True)
             return Response(response_serializer.data, status=status.HTTP_200_OK)
         except Exception:
-            return Response({"error": f"An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def set_board_view(self, board):
         tasks = Task.objects.filter(board=board)

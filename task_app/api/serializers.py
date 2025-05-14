@@ -18,17 +18,10 @@ class TaskSerializer(serializers.ModelSerializer):
     def get_comments_count(self, obj):
         return obj.comment.count()
 
-    # def get_assignee(self, obj):
-    #     assignee_list = obj.assignee.all()
-    #     if not assignee_list.exists():
-    #         return None
-    #     return [{"id": assignee.profile.id, "email": assignee.profile.email, "fullname": assignee.profile.fullname} for assignee in assignee_list]
-
     def get_assignee(self, obj):
         assignee_list = obj.assignee.all()
         if not assignee_list.exists():
             return None
-
         result = []
         for assignee in assignee_list:
             if hasattr(assignee, "profile"):
@@ -38,20 +31,12 @@ class TaskSerializer(serializers.ModelSerializer):
             else:
                 result.append(
                     {"id": assignee.id, "email": assignee.user.email, "fullname": assignee.fullname})
-
         return result
-
-    # def get_reviewer(self, obj):
-    #     reviewer_list = obj.reviewer.all()
-    #     if not reviewer_list.exists():
-    #         return None
-    #     return [{"id": reviewer.profile.id, "email": reviewer.profile.email, "fullname": reviewer.profile.fullname} for reviewer in reviewer_list]
 
     def get_reviewer(self, obj):
         reviewer_list = obj.reviewer.all()
         if not reviewer_list.exists():
             return None
-
         result = []
         for reviewer in reviewer_list:
             if hasattr(reviewer, "profile"):
@@ -61,12 +46,13 @@ class TaskSerializer(serializers.ModelSerializer):
             else:
                 result.append(
                     {"id": reviewer.id, "email": reviewer.user.email, "fullname": reviewer.fullname})
-
         return result
-    
+
+
 class CommentSerializer(serializers.ModelSerializer):
     created_at = serializers.SerializerMethodField()
     author = serializers.SerializerMethodField()
+
     class Meta:
         model = Comment
         fields = ["id", "created_at", "author", "content"]
@@ -76,7 +62,7 @@ class CommentSerializer(serializers.ModelSerializer):
             formatted_date = obj.created_at.strftime("%Y-%m-%dT%H:%M:%S")
             return formatted_date
         return None
-    
+
     def get_author(self, obj):
         if obj.author:
             author_name = Profile.objects.get(pk=obj.author.id).fullname
