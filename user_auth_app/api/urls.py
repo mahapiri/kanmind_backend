@@ -1,5 +1,3 @@
-
-
 from django.urls import path
 
 from user_auth_app.api.views import EmailCheckView, ProfilLoginView, ProfilRegistrationView

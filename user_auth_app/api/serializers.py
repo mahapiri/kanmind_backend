@@ -22,6 +22,13 @@ class ProfilRegistrationSerializer(serializers.Serializer):
         return data
     
 
+class ProfilResponseSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    fullname = serializers.CharField()
+    email = serializers.EmailField()
+    user_id = serializers.IntegerField()
+    
+
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
     password = serializers.CharField(write_only=True, min_length=8)

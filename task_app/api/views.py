@@ -91,7 +91,6 @@ class TaskView(viewsets.ModelViewSet):
                 }, status=status.HTTP_403_FORBIDDEN)
 
             assignees = self.request.data.get('assignee_id', [])
-            print(assignees)
             if assignees and not isinstance(assignees, list):
                 assignees = [assignees]
             elif assignees is None:
@@ -165,7 +164,6 @@ class TaskView(viewsets.ModelViewSet):
         board = Board.objects.get(pk=board_id)
 
         assignees = self.request.data.get('assignee_id', [])
-        print(assignees)
         if assignees and not isinstance(assignees, list):
             assignees = [assignees]
         elif not assignees:

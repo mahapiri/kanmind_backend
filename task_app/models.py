@@ -2,7 +2,6 @@ from django.db import models
 
 from user_auth_app.models import Profile
 
-# Create your models here.
 STATUS_CHOICES = {
     "to-do": "to-do",
     "in-progress": "in-progress",
@@ -19,17 +18,17 @@ STATUS_PRIORITY = {
 
 class Task(models.Model):
     board = models.ForeignKey(
-        "board_app.Board", on_delete=models.CASCADE, related_name="tasks")
+        "board_app.Board", on_delete=models.CASCADE, related_name="task")
     title = models.CharField(max_length=255)
     description = models.TextField(max_length=500, blank=True)
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
     priority = models.CharField(max_length=255, choices=STATUS_PRIORITY)
     assignee = models.ManyToManyField(
-        Profile, blank=True, related_name="assigned_tasks")
+        Profile, blank=True, related_name="assigned_task")
     reviewer = models.ManyToManyField(
-        Profile, blank=True, related_name="reviewer_tasks")
+        Profile, blank=True, related_name="reviewer_task")
     due_date = models.DateField()
-    owner_id = models.ManyToManyField(Profile, related_name="own_tasks")
+    owner = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="owned_task")
 
     class Meta:
         verbose_name = "Task"
@@ -45,7 +44,7 @@ class Comment(models.Model):
         Task, on_delete=models.CASCADE, related_name="comment")
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(
-        Profile, on_delete=models.CASCADE, related_name="comments")
+        Profile, on_delete=models.CASCADE, related_name="comment_author")
     content = models.CharField(max_length=255)
 
     class Meta:
