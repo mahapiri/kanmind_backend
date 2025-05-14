@@ -23,6 +23,7 @@ class BoardWriteSerializer(serializers.ModelSerializer):
     members = serializers.PrimaryKeyRelatedField(
         queryset=Profile.objects.all(),
         many=True,
+        required=False,
         error_messages={
             "does_not_exist": "Member with ID {pk_value} does not exist!"
         }
@@ -38,13 +39,11 @@ class BoardWriteSerializer(serializers.ModelSerializer):
         filtered_members = [
             member for member in members if member.id != owner.id]
         try:
-            board = Board.objects.create(owner_id=owner, **validated_data)
+            board = Board.objects.create(owner=owner, **validated_data)
             board.members.set(filtered_members)
             return board
         except Exception as e:
-            return Response({
-                "error": "Internal Server error!"
-            })
+            raise serializers.ValidationError({"error": f"Internal Server error!"})
 
 
 class BoardSerializer(serializers.ModelSerializer):
@@ -53,7 +52,7 @@ class BoardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Board
-        fields = ['id', 'title', 'owner_id', 'members', 'tasks']
+        fields = ['id', 'title', 'owner', 'members', 'tasks']
 
 
 class BoardUpdateSerializer(serializers.ModelSerializer):

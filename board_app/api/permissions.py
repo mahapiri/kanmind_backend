@@ -1,23 +1,24 @@
 from rest_framework import permissions
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.response import Response
 
 from board_app.models import Profile
 
 
 class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
-    message = "Forbidden. You should be the owner or member of this board!"
 
     def has_object_permission(self, request, view, obj):
         user = request.user
+        
+        user = Profile.objects.filter(user=user).first()
 
-        if not user.is_authenticated:
-            return False
+        is_owner = obj.owner == user
+        is_member = user in obj.board_members.all()
 
-        user = Profile.objects.filter(user_id=user.id).first()
+        if not (is_owner or is_member):
+            raise AuthenticationFailed("Not authorized. You should be the owner or member of this board!")
 
-        is_owner = obj.owner_id == user
-        is_member = user in obj.members.all()
-
-        return is_owner or is_member
+        return True
 
 
 class BoardOwnerAuthentication(permissions.BasePermission):

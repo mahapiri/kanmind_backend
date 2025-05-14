@@ -6,7 +6,7 @@ from user_auth_app.models import Profile
 class Board(models.Model):
     title = models.CharField(max_length=255)
     owner = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="board")
-    members = models.ManyToManyField(Profile, blank=True,related_name="board_members")
+    members = models.ManyToManyField(Profile, blank=True, related_name="board_members")
 
     class Meta:
         verbose_name = "Board"
