@@ -19,14 +19,14 @@ from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api-auth/', include('rest_framework.urls')),
-    path('api/', include('user_auth_app.api.urls')),
-    path('api/boards/', include('board_app.api.urls')),
-    path('api/tasks/', include('task_app.api.urls')),
+    path("admin/", admin.site.urls),
+    path("api-auth/", include("rest_framework.urls")),
+    path("api/", include("user_auth_app.api.urls")),
+    path("api/boards/", include("board_app.api.urls")),
+    path("api/tasks/", include("task_app.api.urls")),
 
 
 
 
-    re_path(r'favicon\.ico$', RedirectView.as_view(url='/static/favicon.svg', permanent=True)),
+    re_path(r"favicon\.ico$", RedirectView.as_view(url="/static/favicon.svg", permanent=True)),
 ]

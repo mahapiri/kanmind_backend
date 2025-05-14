@@ -12,8 +12,8 @@ class TaskSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Task
-        fields = ['id', 'board', 'title', 'description', 'status', 'priority',
-                  'assignee', 'reviewer', 'due_date', 'comments_count']
+        fields = ["id", "board", "title", "description", "status", "priority",
+                  "assignee", "reviewer", "due_date", "comments_count"]
 
     def get_comments_count(self, obj):
         return obj.comment.count()
@@ -31,7 +31,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
         result = []
         for assignee in assignee_list:
-            if hasattr(assignee, 'profile'):
+            if hasattr(assignee, "profile"):
                 profile = assignee.profile
                 result.append(
                     {"id": profile.id, "email": profile.user.email, "fullname": profile.fullname})
@@ -54,7 +54,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
         result = []
         for reviewer in reviewer_list:
-            if hasattr(reviewer, 'profile'):
+            if hasattr(reviewer, "profile"):
                 profile = reviewer.profile
                 result.append(
                     {"id": profile.id, "email": profile.user.email, "fullname": profile.fullname})
@@ -69,11 +69,11 @@ class CommentSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     class Meta:
         model = Comment
-        fields = ['id', 'created_at', 'author', 'content']
+        fields = ["id", "created_at", "author", "content"]
 
     def get_created_at(self, obj):
         if obj.created_at:
-            formatted_date = obj.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+            formatted_date = obj.created_at.strftime("%Y-%m-%dT%H:%M:%S")
             return formatted_date
         return None
     

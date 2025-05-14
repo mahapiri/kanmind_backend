@@ -39,7 +39,7 @@ class MemberSerializer(serializers.ModelSerializer):
 
     class Meta: 
         model = Profile
-        fields = ['id', 'email', 'fullname']
+        fields = ["id", "email", "fullname"]
 
     def get_email(self, obj):
         if obj.user:

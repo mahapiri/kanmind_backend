@@ -1,12 +1,12 @@
 from django.contrib.auth.models import User
-from rest_framework import serializers
-from rest_framework.authtoken.models import Token
-from rest_framework.response import Response
 
-from board_app.admin import Board
-from task_app.api.serializer import TaskSerializer
-from user_auth_app.api.serializers import MemberSerializer
+from rest_framework import serializers
+from rest_framework.exceptions import NotFound
+
 from user_auth_app.models import Profile
+from board_app.admin import Board
+from task_app.api.serializers import TaskSerializer
+from user_auth_app.api.serializers import MemberSerializer
 
 
 class BoardReadSerializer(serializers.Serializer):
@@ -31,11 +31,11 @@ class BoardWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Board
-        fields = ['title', 'members']
+        fields = ["title", "members"]
 
     def create(self, validated_data):
-        owner = validated_data.pop('owner', None)
-        members = validated_data.pop('members', [])
+        owner = validated_data.pop("owner", None)
+        members = validated_data.pop("members", [])
         filtered_members = [
             member for member in members if member.id != owner.id]
         try:
@@ -43,16 +43,33 @@ class BoardWriteSerializer(serializers.ModelSerializer):
             board.members.set(filtered_members)
             return board
         except Exception as e:
-            raise serializers.ValidationError({"error": f"Internal Server error!"})
+            raise serializers.ValidationError(
+                {"error": f"Internal Server error!"})
 
 
 class BoardSerializer(serializers.ModelSerializer):
-    tasks = TaskSerializer(many=True, read_only=True)
-    members = MemberSerializer(many=True, read_only=True)
+    tasks = serializers.SerializerMethodField(read_only=True)
+    members = serializers.SerializerMethodField(read_only=True)
+    owner_id = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Board
-        fields = ['id', 'title', 'owner', 'members', 'tasks']
+        fields = ["id", "title", "owner_id", "members", "tasks"]
+
+    def get_owner_id(self, obj):
+        return obj.id
+
+    def get_members(self, obj):
+        if obj.members.exists():
+            return MemberSerializer(obj.members.all(), many=True).data
+        else:
+            return None
+
+    def get_tasks(self, obj):
+        if obj.task.exists():
+            return TaskSerializer(obj.task.all(), many=True).data
+        else:
+            return None
 
 
 class BoardUpdateSerializer(serializers.ModelSerializer):
@@ -61,26 +78,29 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Board
-        fields = ['id', 'title', 'owner_data', 'members_data']
+        fields = ["id", "title", "owner_data", "members_data"]
 
     def get_owner_data(self, obj):
         try:
-            owner_user = obj.owner_id
-            user_profile = User.objects.get(pk=owner_user.id)
-            owner_profile = Profile.objects.get(user=user_profile)
+            profile = obj.owner
+            user = User.objects.get(pk=profile.user_id)
+            profile = Profile.objects.get(user=user)
 
             return {
-                'id': owner_profile.id,
-                'email': user_profile.email,
-                'fullname': owner_profile.fullname
+                "id": profile.id,
+                "email": user.email,
+                "fullname": profile.fullname
             }
         except Profile.DoesNotExist:
-            return None
-
+            raise NotFound()
 
     def get_members_data(self, obj):
-        return [{
-            'id': member.id,
-            'email': member.user.email,
-            'fullname': member.fullname
-        } for member in obj.members.all()]
+        members_data = []
+        for member in obj.members.all():
+            if member:
+                members_data.append({
+                    "id": member.id,
+                    "email": member.user.email,
+                    "fullname": member.fullname
+                })
+        return members_data if members_data else None

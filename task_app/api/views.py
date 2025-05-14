@@ -9,7 +9,7 @@ from rest_framework import viewsets
 
 from board_app.models import Board
 from task_app.api.permissions import IsAssigneeAuthentication, IsReviewerAuthentication, isMemberOfBoardAuthentication, isOwnerOfBoard, isOwnerOfTask
-from task_app.api.serializer import CommentSerializer, TaskSerializer
+from task_app.api.serializers import CommentSerializer, TaskSerializer
 from task_app.models import Comment, Task
 from user_auth_app.models import Profile
 
@@ -67,7 +67,7 @@ class TaskView(viewsets.ModelViewSet):
         return queryset
 
     def get_permissions(self):
-        if self.request.method == 'DELETE':
+        if self.request.method == "DELETE":
             permission_classes = [isOwnerOfTask, isOwnerOfBoard]
         else:
             permission_classes = [isMemberOfBoardAuthentication]
@@ -77,7 +77,7 @@ class TaskView(viewsets.ModelViewSet):
         user = request.user
         user_profile = Profile.objects.get(user=user)
 
-        board_id = request.data.get('board')
+        board_id = request.data.get("board")
 
         try:
             board = Board.objects.get(pk=board_id)
@@ -87,10 +87,10 @@ class TaskView(viewsets.ModelViewSet):
 
             if not (is_owner or is_member):
                 return Response({
-                    'error': 'Not authorized to create a task for this board!'
+                    "error": "Not authorized to create a task for this board!"
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            assignees = self.request.data.get('assignee_id', [])
+            assignees = self.request.data.get("assignee_id", [])
             if assignees and not isinstance(assignees, list):
                 assignees = [assignees]
             elif assignees is None:
@@ -103,14 +103,14 @@ class TaskView(viewsets.ModelViewSet):
                         id=board_id).exists()
                     if not is_board_member:
                         return Response({
-                            'error': f"Assignee with ID {assignee} does not exist!"
+                            "error": f"Assignee with ID {assignee} does not exist!"
                         }, status=status.HTTP_400_BAD_REQUEST)
                 except Profile.DoesNotExist:
                     return Response({
-                        'error': f'Profil with ID {assignee} does not exist!'
+                        "error": f"Profil with ID {assignee} does not exist!"
                     }, status=status.HTTP_400_BAD_REQUEST)
 
-            reviewers = self.request.data.get('reviewer_id', [])
+            reviewers = self.request.data.get("reviewer_id", [])
             if reviewers and not isinstance(reviewers, list):
                 reviewers = [reviewers]
             elif reviewers is None:
@@ -123,11 +123,11 @@ class TaskView(viewsets.ModelViewSet):
                         id=board_id).exists()
                     if not is_board_member:
                         return Response({
-                            'error': f"Reviewer with ID {reviewer} does not exist!"
+                            "error": f"Reviewer with ID {reviewer} does not exist!"
                         }, status=status.HTTP_400_BAD_REQUEST)
                 except Profile.DoesNotExist:
                     return Response({
-                        'error': f'Profile with ID {reviewer} does not exist!'
+                        "error": f"Profile with ID {reviewer} does not exist!"
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = self.get_serializer(data=request.data)
@@ -149,11 +149,11 @@ class TaskView(viewsets.ModelViewSet):
 
         except Board.DoesNotExist:
             return Response({
-                'error': 'Board does not exist!'
+                "error": "Board does not exist!"
             }, status=status.HTTP_404_NOT_FOUND)
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
 
         # user = request.user
@@ -163,7 +163,7 @@ class TaskView(viewsets.ModelViewSet):
         board_id = task[0].board.pk
         board = Board.objects.get(pk=board_id)
 
-        assignees = self.request.data.get('assignee_id', [])
+        assignees = self.request.data.get("assignee_id", [])
         if assignees and not isinstance(assignees, list):
             assignees = [assignees]
         elif not assignees:
@@ -176,14 +176,14 @@ class TaskView(viewsets.ModelViewSet):
                     id=board_id).exists()
                 if not is_board_member:
                     return Response({
-                        'error': f"Reviewer with ID {assignee} does not exist!"
+                        "error": f"Reviewer with ID {assignee} does not exist!"
                     }, status=status.HTTP_400_BAD_REQUEST)
             except Profile.DoesNotExist:
                 return Response({
-                    'error': f"Profile with ID {assignee} does not exist!"
+                    "error": f"Profile with ID {assignee} does not exist!"
                 })
 
-        reviewers = self.request.data.get('reviewer_id', [])
+        reviewers = self.request.data.get("reviewer_id", [])
         if reviewers and not isinstance(reviewers, list):
             reviewers = [reviewers]
 
@@ -194,20 +194,20 @@ class TaskView(viewsets.ModelViewSet):
                     id=board_id).exists()
                 if not is_board_member:
                     return Response({
-                        'error': f"Reviewer with ID {reviewer} does not exist!"
+                        "error": f"Reviewer with ID {reviewer} does not exist!"
                     }, status=status.HTTP_400_BAD_REQUEST)
             except Profile.DoesNotExist:
                 return Response({
-                    'error': f"Profile with ID {reviewer} does not exist!"
+                    "error": f"Profile with ID {reviewer} does not exist!"
                 })
         serializer = self.get_serializer(
-            instance, data=request.data, partial=partial, context={'request': request})
+            instance, data=request.data, partial=partial, context={"request": request})
         serializer.is_valid(raise_exception=True)
         try:
             task = serializer.save()
         except Exception as e:
             return Response({
-                'error': 'Task was not found!'
+                "error": "Task was not found!"
             }, status=status.HTTP_404_NOT_FOUND)
 
         task.assignee.clear()
@@ -258,13 +258,13 @@ class CommentListView(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user = request.user
         user_profile = Profile.objects.get(user=user)
-        task_id = self.kwargs.get('pk')
+        task_id = self.kwargs.get("pk")
 
         try:
             task = Task.objects.get(pk=task_id)
         except Task.DoesNotExist:
             return Response({
-                'error': 'The task does not exist!'
+                "error": "The task does not exist!"
             }, status=status.HTTP_404_NOT_FOUND)
 
         serializer = self.get_serializer(data=request.data)
@@ -275,8 +275,8 @@ class CommentListView(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def get_object(self):
-        comment_id = self.kwargs.get('comment_id')
-        task_id = self.kwargs.get('pk')
+        comment_id = self.kwargs.get("comment_id")
+        task_id = self.kwargs.get("pk")
 
         if comment_id:
             queryset = self.filter_queryset(self.get_queryset())
