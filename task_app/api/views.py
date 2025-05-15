@@ -1,5 +1,6 @@
+from django.core.exceptions import BadRequest, FieldError
 from rest_framework import generics, status
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets
@@ -59,9 +60,9 @@ class TaskView(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         user_profile = Profile.objects.get(user=user)
-        owned_boards = Board.objects.filter(owner_id=user_profile)
-        member_boards = user_profile.member_boards.all()
-        boards = owned_boards | member_boards
+        owned_boards = Board.objects.filter(owner=user_profile)
+        board_members = user_profile.board_members.all()
+        boards = owned_boards | board_members
         queryset = Task.objects.filter(board__in=boards).distinct()
         return queryset
 
@@ -75,81 +76,29 @@ class TaskView(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user = request.user
         user_profile = Profile.objects.get(user=user)
-
         board_id = request.data.get("board")
-
         try:
             board = Board.objects.get(pk=board_id)
-
-            is_owner = board.owner_id == user_profile
-            is_member = user_profile.member_boards.filter(id=board_id).exists()
-
-            if not (is_owner or is_member):
-                return Response({
-                    "error": "Not authorized to create a task for this board!"
-                }, status=status.HTTP_403_FORBIDDEN)
-
-            assignees = self.request.data.get("assignee_id", [])
-            if assignees and not isinstance(assignees, list):
-                assignees = [assignees]
-            elif assignees is None:
-                assignees = []
-
-            for assignee in assignees:
-                try:
-                    profile = Profile.objects.get(id=assignee)
-                    is_board_member = board.owner_id == profile or profile.member_boards.filter(
-                        id=board_id).exists()
-                    if not is_board_member:
-                        return Response({
-                            "error": f"Assignee with ID {assignee} does not exist!"
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                except Profile.DoesNotExist:
-                    return Response({
-                        "error": f"Profil with ID {assignee} does not exist!"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-            reviewers = self.request.data.get("reviewer_id", [])
-            if reviewers and not isinstance(reviewers, list):
-                reviewers = [reviewers]
-            elif reviewers is None:
-                reviewers = []
-
-            for reviewer in reviewers:
-                try:
-                    profile = Profile.objects.get(id=reviewer)
-                    is_board_member = board.owner_id == profile or profile.member_boards.filter(
-                        id=board_id).exists()
-                    if not is_board_member:
-                        return Response({
-                            "error": f"Reviewer with ID {reviewer} does not exist!"
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                except Profile.DoesNotExist:
-                    return Response({
-                        "error": f"Profile with ID {reviewer} does not exist!"
-                    }, status=status.HTTP_400_BAD_REQUEST)
+            assignees = self.get_assignees(board, board_id)
+            reviewers = self.get_reviewers(board, board_id)
 
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            task = serializer.save()
+            task = serializer.save(owner=user_profile)
 
-            for assignee in assignees:
-                profile = Profile.objects.get(id=assignee)
-                task.assignee.add(profile)
-
-            for reviewer in reviewers:
-                profile = Profile.objects.get(id=reviewer)
-                task.assignee.add(profile)
-
-            task.owner_id.add(user_profile)
-
-            headers = self.get_success_headers(serializer.data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
+            self.create_assignees(assignees, task)
+            self.create_reviewers(reviewers, task)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Board.DoesNotExist:
-            return Response({
-                "error": "Board does not exist!"
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Board does not exist!"}, status=status.HTTP_404_NOT_FOUND)
+        except NotFound:
+            return Response({"error": "Profil was not found"}, status=status.HTTP_404_NOT_FOUND)
+        except AuthenticationFailed:
+            return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
+        except ValidationError:
+            return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
@@ -171,7 +120,7 @@ class TaskView(viewsets.ModelViewSet):
         for assignee in assignees:
             try:
                 profile = Profile.objects.get(id=assignee)
-                is_board_member = board.owner_id == profile or profile.member_boards.filter(
+                is_board_member = board.owner == profile or profile.board_members.filter(
                     id=board_id).exists()
                 if not is_board_member:
                     return Response({
@@ -189,7 +138,7 @@ class TaskView(viewsets.ModelViewSet):
         for reviewer in reviewers:
             try:
                 profile = Profile.objects.get(id=reviewer)
-                is_board_member = board.owner_id == profile or profile.member_boards.filter(
+                is_board_member = board.owner == profile or profile.board_members.filter(
                     id=board_id).exists()
                 if not is_board_member:
                     return Response({
@@ -221,11 +170,9 @@ class TaskView(viewsets.ModelViewSet):
             all_reviewer.delete()
             task.reviewer.add(profile)
 
-        # task.owner_id.add(user_profile)
+        # task.owner.add(user_profile)
 
-        headers = self.get_success_headers(serializer.data)
-
-        return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -234,6 +181,50 @@ class TaskView(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.delete()
+    
+    def get_assignees(self, board, board_id):
+        assignees = self.request.data.get("assignee_id", [])
+        if assignees and not isinstance(assignees, list):
+            assignees = [assignees]
+        elif assignees is None:
+            assignees = []
+        for assignee in assignees:
+            try:
+                profile = Profile.objects.get(id=assignee)
+                is_board_member = board.owner == profile or profile.board_members.filter(id=board_id).exists()
+                if not is_board_member:
+                    raise AuthenticationFailed()
+            except Profile.DoesNotExist:
+                raise NotFound()
+        return assignees  
+            
+    def get_reviewers(self, board, board_id):
+        reviewers = self.request.data.get("reviewer_id", [])
+        if reviewers and not isinstance(reviewers, list):
+            reviewers = [reviewers]
+        elif reviewers is None:
+            reviewers = []
+        for reviewer in reviewers:
+            try:
+                profile = Profile.objects.get(id=reviewer)
+                is_board_member = board.owner == profile or profile.board_members.filter(id=board_id).exists()
+                if not is_board_member:
+                    raise AuthenticationFailed()
+            except Profile.DoesNotExist:
+                raise NotFound() 
+        return reviewers   
+            
+    def create_assignees(self, assignees, task):
+        for assignee in assignees:
+            # müssen member des boards sein
+            profile = Profile.objects.get(id=assignee)
+            task.assignee.add(profile)
+    
+    def create_reviewers(self, reviewers, task):
+        for reviewer in reviewers:
+            # müssen member des boards sein
+            profile = Profile.objects.get(id=reviewer)
+            task.assignee.add(profile)
 
 
 class CommentListView(viewsets.ModelViewSet):
@@ -243,9 +234,9 @@ class CommentListView(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         user_profile = Profile.objects.get(user=user)
-        owned_boards = Board.objects.filter(owner_id=user_profile)
-        member_boards = user_profile.member_boards.all()
-        boards = owned_boards | member_boards
+        owned_boards = Board.objects.filter(owner=user_profile)
+        board_members = user_profile.board_members.all()
+        boards = owned_boards | board_members
         comments = Comment.objects.filter(task__board__in=boards)
         return comments
 
