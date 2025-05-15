@@ -9,20 +9,42 @@ from user_auth_app.models import Profile
 class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
 
     def has_permission(self, request, view):
+        board_id = request.data.get('board')
         user = request.user
         try:
             user_profile = Profile.objects.get(user=user)
-            is_owner = Board.objects.filter(owner=user_profile).exists()
-            is_member = user_profile.board_members.exists()
+            board = Board.objects.get(pk=board_id)
+            is_owner = board.owner == user_profile
+            is_member = user_profile in board.members.all()
 
+            if not (is_owner or is_member):
+                raise AuthenticationFailed()
+            return True
+        except Board.DoesNotExist:
+            raise NotFound()
+
+
+class TaskOwnerOrMemberAuthentication(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+        user = request.user
+        try:
+            profile = Profile.objects.get(user=user)
+            task_id = view.kwargs.get("pk")
+            task = Task.objects.get(id=task_id)
+            if not task:
+                raise NotFound()
+            is_owner = task.owner == profile
+            is_member = profile in task.board.members.all()
             if not (is_owner or is_member):
                 raise AuthenticationFailed()
             return True
         except Profile.DoesNotExist:
             raise NotFound()
-
+        
 
 class TaskOwnerAuthentication(permissions.BasePermission):
+
     def has_permission(self, request, view):
         user = request.user
         try:
@@ -41,7 +63,7 @@ class TaskOwnerAuthentication(permissions.BasePermission):
 
 
 class BoardOwnerAuthentication(permissions.BasePermission):
-    # siehe noch board permissions.py auch hier muss noch geschaut werden ob er der owner ist
+    
     def has_permission(self, request, view):
         user = request.user
         try:

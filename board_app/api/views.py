@@ -128,23 +128,35 @@ class BoardDetailView(viewsets.ModelViewSet):
         try:
             partial = kwargs.get("partial", False)
             instance = self.get_object()
-            members_data = request.data.get("members", [])
-            serializer = BoardUpdateSerializer(instance, data=request.data, partial=partial, context={"request": request})
+            data = request.data.copy()
+            data, members_data = self.validate_members(data)
+            serializer = BoardUpdateSerializer(instance, data=data, partial=partial, context={"request": request})
             if serializer.is_valid():
                 board = serializer.save()
                 valid_members, invalid_members = self.process_members_data(members_data, board)
                 if invalid_members:
                     return Response({"error": "Some member are invalid.","invalid_members": invalid_members}, status=status.HTTP_400_BAD_REQUEST)
-                board.members.set(valid_members)
+                if valid_members is not None: 
+                    board.members.set(valid_members)
+                else: 
+                    board.members.clear()
                 updated_serializer = BoardUpdateSerializer(board, context={"request": request})
                 return Response(updated_serializer.data, status=status.HTTP_200_OK)
         except AuthenticationFailed:
             return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
         except NotFound:
             return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception:
-            return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": f"Internal Server error!{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def validate_members(self, data):
+        members = data.get("members", [])
+        if members and not isinstance(members, list):
+            data["members"] = [members]
+        elif members is None:
+            data["members"] = []
+        return data, data["members"]
+    
     def process_members_data(self, members_data, board):
         valid_members = []
         invalid_members = []
@@ -158,7 +170,9 @@ class BoardDetailView(viewsets.ModelViewSet):
                         invalid_members.append(member_id)
                 except ObjectDoesNotExist:
                     invalid_members.append(member_id)
-            return valid_members, invalid_members
+        else: 
+            valid_members = None    
+        return valid_members, invalid_members
 
     def destroy(self, request, *args, **kwargs):
         try: 
