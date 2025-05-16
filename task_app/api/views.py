@@ -177,7 +177,6 @@ class CommentListView(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         task_id = self.kwargs.get("task_id")
-        comment_id = self.kwargs.get("comment_id")
         user = request.user
         try:
             user_profile = Profile.objects.get(user=user)

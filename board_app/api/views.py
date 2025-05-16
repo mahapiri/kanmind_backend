@@ -142,8 +142,6 @@ class BoardDetailView(viewsets.ModelViewSet):
                     board.members.clear()
                 updated_serializer = BoardUpdateSerializer(board, context={"request": request})
                 return Response(updated_serializer.data, status=status.HTTP_200_OK)
-        except AuthenticationFailed:
-            return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
         except NotFound:
             return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -181,8 +179,6 @@ class BoardDetailView(viewsets.ModelViewSet):
             return Response(None, status=status.HTTP_204_NO_CONTENT)
         except NotFound:
             return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
-        except AuthenticationFailed:
-            return Response({"error": "Forbidden. You should be the owner of this board!"}, status=status.HTTP_403_FORBIDDEN)
         except Exception:
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
