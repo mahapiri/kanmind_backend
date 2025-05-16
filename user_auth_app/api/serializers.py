@@ -5,6 +5,11 @@ from board_app.models import Profile
 
 
 class ProfilRegistrationSerializer(serializers.Serializer):
+    """
+    Serializer for user registration.
+    
+    Handles validation of user registration data including password matching and email uniqueness.
+    """
     fullname = serializers.CharField(max_length=255)
     email = serializers.EmailField(max_length=255)
     password = serializers.CharField(write_only=True, min_length=8)
@@ -23,6 +28,11 @@ class ProfilRegistrationSerializer(serializers.Serializer):
     
 
 class ProfilResponseSerializer(serializers.Serializer):
+    """
+    Serializer for user profile response after registration or login.
+    
+    Returns authentication token and basic user information.
+    """    
     token = serializers.CharField()
     fullname = serializers.CharField()
     email = serializers.EmailField()
@@ -30,11 +40,21 @@ class ProfilResponseSerializer(serializers.Serializer):
     
 
 class LoginSerializer(serializers.Serializer):
+    """
+    Serializer for user login.
+    
+    Handles validation of login credentials.
+    """
     email = serializers.EmailField(max_length=255)
     password = serializers.CharField(write_only=True, min_length=8)
 
 
 class MemberSerializer(serializers.ModelSerializer):
+    """
+    Serializer for board member profiles.
+    
+    Used when displaying board members with their basic information.
+    """
     email = serializers.SerializerMethodField()
 
     class Meta: 

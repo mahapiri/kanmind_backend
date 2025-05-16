@@ -54,12 +54,6 @@ class BoardListView(generics.ListAPIView):
     def set_board_view(self, board):
         """
         Transform board object into API response format
-
-        Args:
-            board: Board model instance
-
-        Returns:
-            dict: Board data with additional counts
         """
         tasks = Task.objects.filter(board=board)
         return {
@@ -72,7 +66,17 @@ class BoardListView(generics.ListAPIView):
             "owner_id": board.owner.id,
         }
 
-    """Create a new board with the authenticated user as owner"""
+    @extend_schema(
+        summary="Create new board",
+        description="Creates a new board with the authenticated user as owner",
+        tags=["Board"],
+        request=BoardWriteSerializer,
+        responses={
+            201: BoardReadSerializer,
+            400: OpenApiResponse(description="Invalid request data or user profile not found"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def post(self, request):
         data = request.data.copy()
         data = self.validate_members(data)
@@ -92,15 +96,6 @@ class BoardListView(generics.ListAPIView):
     def get_user_from_token(self, request):
         """
         Extract user ID from token
-        
-        Args:
-            request: Request object with Authorization header
-            
-        Returns:
-            int: User ID
-            
-        Raises:
-            AuthenticationFailed: If token is invalid or missing
         """
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Token "):
@@ -229,12 +224,6 @@ class BoardDetailView(viewsets.ModelViewSet):
     def validate_members(self, data):
         """
         Ensures members data is always in list format.
-        
-        Args:
-            data: Request data dictionary
-            
-        Returns:
-            tuple: (updated data, members list)
         """
         members = data.get("members", [])
         if members and not isinstance(members, list):

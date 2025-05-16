@@ -7,6 +7,10 @@ from user_auth_app.models import Profile
 
 
 class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
+    """
+    Permission class that checks if the user is either the owner or a member of the board.
+    Used for operations that require board membership, such as task creation.
+    """
 
     def has_permission(self, request, view):
         board_id = request.data.get('board')
@@ -27,6 +31,10 @@ class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
 
 
 class TaskOwnerOrBoardMemberAuthentication(permissions.BasePermission):
+    """
+    Permission class that checks if the user is either the task owner or a member of the board.
+    Used for operations like updating tasks.
+    """
 
     def has_permission(self, request, view):
         user = request.user
@@ -46,6 +54,10 @@ class TaskOwnerOrBoardMemberAuthentication(permissions.BasePermission):
         
 
 class TaskOwnerOrBoardOwnerAuthentication(permissions.BasePermission):
+    """
+    Permission class that checks if the user is either the task owner or the board owner.
+    Used for operations that require higher permission levels, like deleting tasks.
+    """
     
     def has_permission(self, request, view):
         user = request.user
@@ -67,6 +79,10 @@ class TaskOwnerOrBoardOwnerAuthentication(permissions.BasePermission):
 
 
 class CommentIsBoardOwnerOrMemberAuthentication(permissions.BasePermission):
+    """
+    Permission class that checks if the user is either the board owner or a board member.
+    Used for operations related to comments, such as viewing or adding comments.
+    """
 
     def has_permission(self, request, view):
         task_id = view.kwargs.get("task_id")
@@ -89,7 +105,12 @@ class CommentIsBoardOwnerOrMemberAuthentication(permissions.BasePermission):
             raise NotFound("Task was not found.")
         
 class CommentOwnerAuthentication(permissions.BasePermission):
-    
+    """
+    Permission class that checks if the user is the owner of a comment.
+    Used for operations that should only be performed by the comment author,
+    such as deleting comments.
+    """
+        
     def has_permission(self, request, view):
         comment_id = view.kwargs.get("comment_id")
         user = request.user

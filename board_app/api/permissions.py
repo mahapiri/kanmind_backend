@@ -14,17 +14,6 @@ class BoardOwnerOrMemberAuthentication(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         """
         Check if the user is either the board owner or a board member.
-        
-        Args:
-            request: The request being made
-            view: The view that the permission is being checked against
-            obj: The board object being accessed
-            
-        Returns:
-            bool: True if user is owner or member, False otherwise
-            
-        Raises:
-            NotFound: If the user profile doesn't exist
         """
         user = request.user
 
@@ -50,17 +39,6 @@ class BoardOwnerAuthentication(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         """
         Check if the user is the board owner.
-        
-        Args:
-            request: The request being made
-            view: The view that the permission is being checked against
-            obj: The board object being accessed
-            
-        Returns:
-            bool: True if user is owner, False otherwise
-            
-        Raises:
-            NotFound: If the user profile doesn't exist
         """
         user = request.user
 

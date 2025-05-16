@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,10 @@ from task_app.api.serializers import CommentSerializer, TaskSerializer
 
 
 class AssignedToMeView(generics.GenericAPIView):
+    """
+    View to list all tasks assigned to the current authenticated user.
+    Returns a list of Task objects where the current user is assigned.
+    """
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
 
@@ -20,6 +25,15 @@ class AssignedToMeView(generics.GenericAPIView):
         profile = Profile.objects.get(user=user)
         return profile
 
+    @extend_schema(
+        summary="Get tasks assigned to me",
+        description="Returns all tasks that are assigned to the current authenticated user",
+        tags=["Task"],
+        responses={
+            200: TaskSerializer(many=True),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def get(self, request, *args, **kwargs):
         try:
             profile = self.get_object()
@@ -31,14 +45,36 @@ class AssignedToMeView(generics.GenericAPIView):
 
 
 class ReviewerView(generics.GenericAPIView):
+    """
+    View to list all tasks where the current authenticated user is a reviewer.
+    Returns Task objects associated with the user as a reviewer.
+    """
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
+        """
+        Retrieve the Profile object for the current user.
+
+        Returns:
+            Profile: The user's profile object
+
+        Raises:
+            Profile.DoesNotExist: If profile doesn't exist for user
+        """
         user = self.request.user
         profile = Profile.objects.get(user=user)
         return profile
 
+    @extend_schema(
+        summary="Get tasks to review",
+        description="Returns all tasks where the current authenticated user is assigned as a reviewer",
+        tags=["Task"],
+        responses={
+            200: TaskSerializer(many=True),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def get(self, request, *args, **kwargs):
         try:
             profile = self.get_object()
@@ -50,10 +86,24 @@ class ReviewerView(generics.GenericAPIView):
 
 
 class TaskView(viewsets.ModelViewSet):
+    """
+    ViewSet for managing task operations.
+    Provides CRUD functionality for tasks with appropriate permissions.
+    """
     serializer_class = TaskSerializer
     queryset = Task.objects.all()
 
     def get_permissions(self):
+        """
+        Determines the permissions required based on the HTTP method.
+
+        - PUT/PATCH: Task owner or board member
+        - DELETE: Task owner or board owner
+        - Others: Board owner or member
+
+        Returns:
+            list: Instantiated permission classes
+        """
         if self.request.method in ["PUT", "PATCH"]:
             permission_classes = [IsAuthenticated, TaskOwnerOrBoardMemberAuthentication]
         elif self.request.method == "DELETE":
@@ -62,6 +112,16 @@ class TaskView(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated, BoardOwnerOrMemberAuthentication]
         return [permission() for permission in permission_classes]
 
+    @extend_schema(
+        summary="Create a new task",
+        description="Creates a task with optional assignees and reviewers",
+        tags=["Task"],
+        responses={
+            201: TaskSerializer,
+            400: OpenApiResponse(description="Invalid request data"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def create(self, request, *args, **kwargs):
         user = request.user
         user_profile = Profile.objects.get(user=user)
@@ -83,6 +143,16 @@ class TaskView(viewsets.ModelViewSet):
         except Exception:
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @extend_schema(
+        summary="Update a task",
+        description="Updates task details including assignees and reviewers",
+        tags=["Task"],
+        responses={
+            200: TaskSerializer,
+            400: OpenApiResponse(description="Invalid request data"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
@@ -103,6 +173,15 @@ class TaskView(viewsets.ModelViewSet):
         except Exception:
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @extend_schema(
+        summary="Delete a task",
+        description="Permanently removes a task",
+        tags=["Task"],
+        responses={
+            204: OpenApiResponse(description="Task successfully deleted"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def destroy(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
@@ -112,9 +191,27 @@ class TaskView(viewsets.ModelViewSet):
             return Response({"error": f"Internal Server error!{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_destroy(self, instance):
+        """
+        Perform the deletion of the task instance.
+        """
         instance.delete()
 
     def get_profiles(self, board, board_id, profile_ids):
+        """
+        Validate that profile IDs belong to board members.
+
+        Args:
+            board: Board object
+            board_id: ID of the board
+            profile_ids: List of profile IDs or single profile ID
+
+        Returns:
+            list: Validated list of profile IDs
+
+        Raises:
+            PermissionDenied: If a profile is not a board member
+            NotFound: If a profile does not exist
+        """
         if profile_ids and not isinstance(profile_ids, list):
             profile_ids = [profile_ids]
         elif profile_ids is None:
@@ -127,10 +224,21 @@ class TaskView(viewsets.ModelViewSet):
                 if not is_board_member:
                     raise PermissionDenied("You are not a board member")
             except Profile.DoesNotExist:
-                    raise NotFound("Profile was not found.")
+                raise NotFound("Profile was not found.")
         return profile_ids
 
     def create_profiles(self, profile_ids, task, field):
+        """
+        Add profiles to task as assignees or reviewers.
+
+        Args:
+            profile_ids: List of profile IDs
+            task: Task object
+            field: Either "reviewer" or "assignee"
+
+        Raises:
+            NotFound: If a profile does not exist
+        """
         for profile_id in profile_ids:
             try:
                 profile = Profile.objects.get(id=profile_id)
@@ -143,9 +251,16 @@ class TaskView(viewsets.ModelViewSet):
 
 
 class CommentListView(viewsets.ModelViewSet):
+    """
+    ViewSet for managing comments on tasks.
+    Provides CRUD operations for comments with appropriate permissions based on user roles.
+    """
     serializer_class = CommentSerializer
 
     def get_permissions(self):
+        """
+        Determine permissions based on the request method.
+        """
         if self.request.method == "DELETE":
             permission_classes = [IsAuthenticated, CommentOwnerAuthentication]
         else:
@@ -153,17 +268,32 @@ class CommentListView(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
+        """
+        Get all comments for a specific task.
+        """
         task_id = self.kwargs.get("task_id")
         task = Task.objects.get(pk=task_id)
         queryset = task.comment.all()
         return queryset
 
     def get_object(self):
+        """
+        Get a specific comment by ID.
+        """
         comment_id = self.kwargs.get("comment_id")
         if comment_id:
             comment = Comment.objects.get(pk=comment_id)
         return comment
 
+    @extend_schema(
+        summary="List comments for a task",
+        description="Returns all comments associated with a specific task",
+        tags=["Comment"],
+        responses={
+            200: CommentSerializer(many=True),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
@@ -175,6 +305,16 @@ class CommentListView(viewsets.ModelViewSet):
         except Exception:
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @extend_schema(
+        summary="Create a comment",
+        description="Creates a new comment on a specific task",
+        tags=["Comment"],
+        responses={
+            201: CommentSerializer,
+            400: OpenApiResponse(description="Invalid request data"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def create(self, request, *args, **kwargs):
         task_id = self.kwargs.get("task_id")
         user = request.user
@@ -189,8 +329,20 @@ class CommentListView(viewsets.ModelViewSet):
             return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
+    @extend_schema(
+        summary="Delete a comment",
+        description="Permanently removes a comment",
+        tags=["Comment"],
+        responses={
+            204: OpenApiResponse(description="Comment successfully deleted"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def destroy(self, request, *args, **kwargs):
+        """
+        Perform the deletion of the comment instance.
+        """
         try:
             instance = self.get_object()
             self.perform_destroy(instance)

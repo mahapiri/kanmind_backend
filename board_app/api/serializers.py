@@ -45,15 +45,6 @@ class BoardWriteSerializer(serializers.ModelSerializer):
         """
         Create a new board with the provided owner and members.
         Ensures the owner is not duplicated in the members list.
-        
-        Args:
-            validated_data: Data from the serializer validation
-            
-        Returns:
-            Board: The newly created board instance
-            
-        Raises:
-            ValidationError: If there's an error during board creation
         """
         owner = validated_data.pop("owner", None)
         members = validated_data.pop("members", [])
@@ -121,12 +112,6 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
     def get_owner_data(self, obj):
         """
         Get detailed information about the board owner.
-        
-        Returns:
-            dict: Owner profile data with id, email, and fullname
-            
-        Raises:
-            NotFound: If the owner profile doesn't exist
         """
         try:
             profile = obj.owner
@@ -144,10 +129,6 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
     def get_members_data(self, obj):
         """
         Get detailed information about all board members.
-        
-        Returns:
-            list: List of member data with id, email, and fullname
-            None: If the board has no members
         """
         members_data = []
         for member in obj.members.all():
