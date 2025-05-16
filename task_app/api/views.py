@@ -7,7 +7,7 @@ from rest_framework import viewsets
 from user_auth_app.models import Profile
 from task_app.models import Comment, Task
 from board_app.models import Board
-from task_app.api.permissions import BoardOwnerOrMemberAuthentication, TaskOwnerOrBoardOwnerAuthentication, TaskOwnerOrMemberAuthentication
+from task_app.api.permissions import BoardOwnerOrMemberAuthentication, CommentIsBoardOwnerOrMemberAuthentication, CommentOwnerAuthentication, TaskOwnerOrBoardOwnerAuthentication, TaskOwnerOrBoardMemberAuthentication
 from task_app.api.serializers import CommentSerializer, TaskSerializer
 
 
@@ -55,7 +55,7 @@ class TaskView(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.request.method in ["PUT", "PATCH"]:
-            permission_classes = [IsAuthenticated, TaskOwnerOrMemberAuthentication]
+            permission_classes = [IsAuthenticated, TaskOwnerOrBoardMemberAuthentication]
         elif self.request.method == "DELETE":
             permission_classes = [IsAuthenticated, TaskOwnerOrBoardOwnerAuthentication]
         else:
@@ -125,9 +125,9 @@ class TaskView(viewsets.ModelViewSet):
                 is_board_member = board.owner == profile or profile.board_members.filter(
                     id=board_id).exists()
                 if not is_board_member:
-                    raise PermissionDenied()
+                    raise PermissionDenied("You are not a board member")
             except Profile.DoesNotExist:
-                raise NotFound()
+                    raise NotFound("Profile was not found.")
         return profile_ids
 
     def create_profiles(self, profile_ids, task, field):
@@ -139,63 +139,65 @@ class TaskView(viewsets.ModelViewSet):
                 elif field == "assignee":
                     task.assignee.add(profile)
             except Profile.DoesNotExist:
-                raise NotFound()
+                raise NotFound("Profile was not found.")
 
 
 class CommentListView(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
-    # permission_classes = [isMemberOfBoardAuthentication] /// isMemberOfBoardAuthentication
+
+    def get_permissions(self):
+        if self.request.method == "DELETE":
+            permission_classes = [IsAuthenticated, CommentOwnerAuthentication]
+        else:
+            permission_classes = [IsAuthenticated, CommentIsBoardOwnerOrMemberAuthentication]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        user = self.request.user
-        user_profile = Profile.objects.get(user=user)
-        owned_boards = Board.objects.filter(owner=user_profile)
-        board_members = user_profile.board_members.all()
-        boards = owned_boards | board_members
-        comments = Comment.objects.filter(task__board__in=boards)
-        return comments
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = CommentSerializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def create(self, request, *args, **kwargs):
-        user = request.user
-        user_profile = Profile.objects.get(user=user)
-        task_id = self.kwargs.get("pk")
-
-        try:
-            task = Task.objects.get(pk=task_id)
-        except Task.DoesNotExist:
-            return Response({
-                "error": "The task does not exist!"
-            }, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        serializer.save(task=task, author=user_profile)
-
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        task_id = self.kwargs.get("task_id")
+        task = Task.objects.get(pk=task_id)
+        queryset = task.comment.all()
+        return queryset
 
     def get_object(self):
         comment_id = self.kwargs.get("comment_id")
-        task_id = self.kwargs.get("pk")
-
         if comment_id:
-            queryset = self.filter_queryset(self.get_queryset())
-            obj = generics.get_object_or_404(
-                queryset, pk=comment_id, task=task_id)
+            comment = Comment.objects.get(pk=comment_id)
+        return comment
 
-            self.check_object_permissions(self.request, obj)
-            return obj
-        return super().get_object()
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = CommentSerializer(queryset, many=True)
+            if not serializer.data:
+                return Response(None, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception:
+            return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def create(self, request, *args, **kwargs):
+        task_id = self.kwargs.get("task_id")
+        comment_id = self.kwargs.get("comment_id")
+        user = request.user
+        try:
+            user_profile = Profile.objects.get(user=user)
+            task = Task.objects.get(pk=task_id)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(task=task, author=user_profile)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError:
+            return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
-        return Response(None, status=status.HTTP_204_NO_CONTENT)
+        try:
+            instance = self.get_object()
+            self.perform_destroy(instance)
+            return Response(None, status=status.HTTP_204_NO_CONTENT)
+        except Exception:
+            return Response({"error": f"Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_destroy(self, instance):
         instance.delete()
