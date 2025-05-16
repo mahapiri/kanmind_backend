@@ -226,6 +226,8 @@ class BoardDetailView(viewsets.ModelViewSet):
         Ensures members data is always in list format.
         """
         members = data.get("members", [])
+        if not members: 
+            data["members"] = []
         if members and not isinstance(members, list):
             data["members"] = [members]
         elif members is None:
