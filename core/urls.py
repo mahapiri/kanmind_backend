@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -24,9 +25,7 @@ urlpatterns = [
     path("api/", include("user_auth_app.api.urls")),
     path("api/boards/", include("board_app.api.urls")),
     path("api/tasks/", include("task_app.api.urls")),
-
-
-
-
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     re_path(r"favicon\.ico$", RedirectView.as_view(url="/static/favicon.svg", permanent=True)),
 ]

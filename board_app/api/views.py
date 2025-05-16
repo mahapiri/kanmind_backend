@@ -1,6 +1,7 @@
 from django.db import models
 from django.http import Http404
 
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, status
 from rest_framework import viewsets
 from rest_framework.authtoken.models import Token
@@ -19,13 +20,23 @@ from board_app.api.serializers import BoardReadSerializer, BoardSerializer, Boar
 
 class BoardListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
-
+    
     def get_serializer_class(self):
+        # Dynamic serializer selection based on HTTP method
         if self.request.method == "GET":
             return BoardReadSerializer
         elif self.request.method == "POST":
             return BoardWriteSerializer
 
+    @extend_schema(
+        summary="List user boards",
+        description="Returns all boards where the user is either owner or member",
+        tags=["Board"],
+        responses={
+            200: BoardReadSerializer(many=True),
+            500: OpenApiResponse(description="Internal server error"),
+        }
+    )
     def get(self, request):
         try:
             user = request.user
@@ -41,6 +52,15 @@ class BoardListView(generics.ListAPIView):
             return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def set_board_view(self, board):
+        """
+        Transform board object into API response format
+
+        Args:
+            board: Board model instance
+
+        Returns:
+            dict: Board data with additional counts
+        """
         tasks = Task.objects.filter(board=board)
         return {
             "id": board.id,
@@ -52,6 +72,7 @@ class BoardListView(generics.ListAPIView):
             "owner_id": board.owner.id,
         }
 
+    """Create a new board with the authenticated user as owner"""
     def post(self, request):
         data = request.data.copy()
         data = self.validate_members(data)
@@ -69,6 +90,18 @@ class BoardListView(generics.ListAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_user_from_token(self, request):
+        """
+        Extract user ID from token
+        
+        Args:
+            request: Request object with Authorization header
+            
+        Returns:
+            int: User ID
+            
+        Raises:
+            AuthenticationFailed: If token is invalid or missing
+        """
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Token "):
             raise AuthenticationFailed("No valid Token found!")
@@ -81,6 +114,7 @@ class BoardListView(generics.ListAPIView):
             raise AuthenticationFailed("Invalid Token!")
 
     def validate_members(self, data):
+        # Helper to ensure members is always a list
         members = data.get("members", [])
         if members and not isinstance(members, list):
             data["members"] = [members]
@@ -90,14 +124,28 @@ class BoardListView(generics.ListAPIView):
 
 
 class BoardDetailView(viewsets.ModelViewSet):
+    """
+    ViewSet for managing board details with CRUD operations.
+    Handles GET, PUT, PATCH and DELETE methods for boards.
+    """
     queryset = Board.objects.all()
 
     def get_serializer_class(self):
+        """
+        Returns appropriate serializer based on request method.
+        Uses BoardUpdateSerializer for update operations.
+        """
         if self.request.method in ["PATCH", "PUT"]:
             return BoardUpdateSerializer
         return BoardSerializer
 
     def get_permissions(self):
+        """
+        Assigns permissions based on the action:
+        - BoardOwnerAuthentication for delete operations
+        - BoardOwnerOrMemberAuthentication for other operations
+        Both require user authentication first
+        """
         if self.action == "destroy":
             permission_classes = [IsAuthenticated, BoardOwnerAuthentication]
         else:
@@ -105,6 +153,17 @@ class BoardDetailView(viewsets.ModelViewSet):
                                   BoardOwnerOrMemberAuthentication]
         return [permission() for permission in permission_classes]
 
+    @extend_schema(
+        summary="Get board details",
+        description="Retrieves details of a specific board",
+        tags=["Board"],
+        responses={
+            200: BoardSerializer,
+            403: OpenApiResponse(description="Not owner or member of board"),
+            404: OpenApiResponse(description="Board not found"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def retrieve(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
@@ -118,13 +177,33 @@ class BoardDetailView(viewsets.ModelViewSet):
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_object(self):
+        """
+        Override get_object to handle not found errors consistently.
+        Translates Django's ObjectDoesNotExist and Http404 to NotFound.
+        """
         try:
             obj = super().get_object()
             return obj
         except (ObjectDoesNotExist, Http404):
             raise NotFound()
 
+    @extend_schema(
+        summary="Update board",
+        description="Updates board information including members list",
+        tags=["Board"],
+        request=BoardUpdateSerializer,
+        responses={
+            200: BoardUpdateSerializer,
+            400: OpenApiResponse(description="Invalid members data"),
+            404: OpenApiResponse(description="Board not found"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def update(self, request, *args, **kwargs):
+        """
+        Update a board with PUT/PATCH methods.
+        Handles member validation and updates board-member relationships.
+        """
         try:
             partial = kwargs.get("partial", False)
             instance = self.get_object()
@@ -148,6 +227,15 @@ class BoardDetailView(viewsets.ModelViewSet):
             return Response({"error": f"Internal Server error!{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def validate_members(self, data):
+        """
+        Ensures members data is always in list format.
+        
+        Args:
+            data: Request data dictionary
+            
+        Returns:
+            tuple: (updated data, members list)
+        """
         members = data.get("members", [])
         if members and not isinstance(members, list):
             data["members"] = [members]
@@ -156,6 +244,17 @@ class BoardDetailView(viewsets.ModelViewSet):
         return data, data["members"]
     
     def process_members_data(self, members_data, board):
+        """
+        Processes member IDs to valid Profile objects.
+        Ensures board owner isn't added as a member.
+        
+        Args:
+            members_data: List of member IDs
+            board: Board instance
+            
+        Returns:
+            tuple: (valid member profiles, invalid member IDs)
+        """
         valid_members = []
         invalid_members = []
         if members_data is not None:
@@ -172,7 +271,21 @@ class BoardDetailView(viewsets.ModelViewSet):
             valid_members = None    
         return valid_members, invalid_members
 
+    @extend_schema(
+        summary="Delete board",
+        description="Permanently removes a board",
+        tags=["Board"],
+        responses={
+            204: OpenApiResponse(description="Board successfully deleted"),
+            404: OpenApiResponse(description="Board not found"),
+            500: OpenApiResponse(description="Internal server error")
+        }
+    )
     def destroy(self, request, *args, **kwargs):
+        """
+        Delete a board.
+        Only board owners can perform this action.
+        """
         try: 
             instance = self.get_object()
             self.perform_destroy(instance)
@@ -183,4 +296,7 @@ class BoardDetailView(viewsets.ModelViewSet):
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_destroy(self, instance):
+        """
+        Perform the deletion of the board instance.
+        """
         instance.delete()

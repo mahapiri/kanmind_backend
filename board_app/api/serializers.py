@@ -10,6 +10,10 @@ from user_auth_app.api.serializers import MemberSerializer
 
 
 class BoardReadSerializer(serializers.Serializer):
+    """
+    Serializer for reading board data with counts.
+    Used for board list views with statistical information.
+    """
     id = serializers.IntegerField()
     title = serializers.CharField()
     member_count = serializers.IntegerField()
@@ -20,6 +24,10 @@ class BoardReadSerializer(serializers.Serializer):
 
 
 class BoardWriteSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating new boards.
+    Handles member assignment and validation.
+    """
     members = serializers.PrimaryKeyRelatedField(
         queryset=Profile.objects.all(),
         many=True,
@@ -34,6 +42,19 @@ class BoardWriteSerializer(serializers.ModelSerializer):
         fields = ["title", "members"]
 
     def create(self, validated_data):
+        """
+        Create a new board with the provided owner and members.
+        Ensures the owner is not duplicated in the members list.
+        
+        Args:
+            validated_data: Data from the serializer validation
+            
+        Returns:
+            Board: The newly created board instance
+            
+        Raises:
+            ValidationError: If there's an error during board creation
+        """
         owner = validated_data.pop("owner", None)
         members = validated_data.pop("members", [])
         filtered_members = [
@@ -48,6 +69,10 @@ class BoardWriteSerializer(serializers.ModelSerializer):
 
 
 class BoardSerializer(serializers.ModelSerializer):
+    """
+    Serializer for detailed board representation.
+    Includes tasks and members data.
+    """
     tasks = serializers.SerializerMethodField(read_only=True)
     members = serializers.SerializerMethodField(read_only=True)
     owner_id = serializers.SerializerMethodField(read_only=True)
@@ -57,15 +82,24 @@ class BoardSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "owner_id", "members", "tasks"]
 
     def get_owner_id(self, obj):
-        return obj.id
+        """Return the board's ID"""
+        return obj.owner.id
 
     def get_members(self, obj):
+        """
+        Get serialized data for all board members.
+        Returns None if there are no members.
+        """
         if obj.members.exists():
             return MemberSerializer(obj.members.all(), many=True).data
         else:
             return None
 
     def get_tasks(self, obj):
+        """
+        Get serialized data for all tasks on the board.
+        Returns None if there are no tasks.
+        """
         if obj.task.exists():
             return TaskSerializer(obj.task.all(), many=True).data
         else:
@@ -73,6 +107,10 @@ class BoardSerializer(serializers.ModelSerializer):
 
 
 class BoardUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating board details.
+    Includes owner and members information.
+    """
     owner_data = serializers.SerializerMethodField(read_only=True)
     members_data = serializers.SerializerMethodField(read_only=True)
 
@@ -81,6 +119,15 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "owner_data", "members_data"]
 
     def get_owner_data(self, obj):
+        """
+        Get detailed information about the board owner.
+        
+        Returns:
+            dict: Owner profile data with id, email, and fullname
+            
+        Raises:
+            NotFound: If the owner profile doesn't exist
+        """
         try:
             profile = obj.owner
             user = User.objects.get(pk=profile.user_id)
@@ -95,6 +142,13 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
             raise NotFound()
 
     def get_members_data(self, obj):
+        """
+        Get detailed information about all board members.
+        
+        Returns:
+            list: List of member data with id, email, and fullname
+            None: If the board has no members
+        """
         members_data = []
         for member in obj.members.all():
             if member:

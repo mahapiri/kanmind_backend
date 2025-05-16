@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework.authtoken',
+    'drf_spectacular',
     'user_auth_app',
     'task_app',
     'board_app',
@@ -158,4 +159,21 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'KanMind API',
+    'DESCRIPTION': 'KanMind Backend is a RESTful API built with Django and Django REST Framework (DRF)',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    
+    'TAGS': [
+        {'name': 'Board', 'description': 'Board Management Endpoints'},
+        {'name': 'Task', 'description': 'Task Management Endpoints'},
+        {'name': 'Authentication', 'description': 'Authentication and User Management'},
+    ],
+    
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_NO_READ_ONLY_REQUIRED': False,
 }
