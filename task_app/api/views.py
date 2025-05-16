@@ -1,13 +1,13 @@
 from rest_framework import generics, status
-from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied, ValidationError
-from rest_framework.permissions import OR, IsAuthenticated
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets
 
 from user_auth_app.models import Profile
 from task_app.models import Comment, Task
 from board_app.models import Board
-from task_app.api.permissions import BoardOwnerOrMemberAuthentication, TaskOwnerAuthentication, BoardOwnerAuthentication, TaskOwnerOrMemberAuthentication
+from task_app.api.permissions import BoardOwnerOrMemberAuthentication, TaskOwnerOrBoardOwnerAuthentication, TaskOwnerOrMemberAuthentication
 from task_app.api.serializers import CommentSerializer, TaskSerializer
 
 
@@ -26,8 +26,6 @@ class AssignedToMeView(generics.GenericAPIView):
             assigned_tasks = profile.assigned_task.all()
             serializer = TaskSerializer(assigned_tasks, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except AuthenticationFailed:
-            return Response({"error": "Not authorized. You should be logged in to see the tasks!"}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception:
             return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -47,8 +45,6 @@ class ReviewerView(generics.GenericAPIView):
             reviewer_tasks = profile.reviewer_task.all()
             serializer = TaskSerializer(reviewer_tasks, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except AuthenticationFailed:
-            return Response({"error": "Not authorized. You should be logged in to see the tasks!"}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception:
             return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -57,32 +53,14 @@ class TaskView(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     queryset = Task.objects.all()
 
-    # def get_queryset(self):
-    #     user = self.request.user
-    #     user_profile = Profile.objects.get(user=user)
-    #     owned_boards = Board.objects.filter(owner=user_profile)
-    #     board_members = user_profile.board_members.all()
-    #     boards = owned_boards | board_members
-    #     queryset = Task.objects.filter(board__in=boards).distinct()
-    #     return queryset
-
     def get_permissions(self):
-        if self.request.method == "DELETE":
-            permission_classes = [
-                IsAuthenticated, (TaskOwnerAuthentication | BoardOwnerAuthentication)]
-        elif self.request.method == "PUT" or "PATCH":
+        if self.request.method in ["PUT", "PATCH"]:
             permission_classes = [IsAuthenticated, TaskOwnerOrMemberAuthentication]
+        elif self.request.method == "DELETE":
+            permission_classes = [IsAuthenticated, TaskOwnerOrBoardOwnerAuthentication]
         else:
-            permission_classes = [IsAuthenticated,
-                                  BoardOwnerOrMemberAuthentication]
+            permission_classes = [IsAuthenticated, BoardOwnerOrMemberAuthentication]
         return [permission() for permission in permission_classes]
-    
-    def get_object(self):
-        try:
-            print("getobject")
-            return super().get_object()
-        except Task.DoesNotExist:
-            raise NotFound()
 
     def create(self, request, *args, **kwargs):
         user = request.user
@@ -90,10 +68,8 @@ class TaskView(viewsets.ModelViewSet):
         board_id = request.data.get("board")
         try:
             board = Board.objects.get(pk=board_id)
-            assignees = self.get_profiles(
-                board, board_id, self.request.data.get("assignee_id", []))
-            reviewers = self.get_profiles(
-                board, board_id, self.request.data.get("reviewer_id", []))
+            assignees = self.get_profiles(board, board_id, self.request.data.get("assignee_id", []))
+            reviewers = self.get_profiles(board, board_id, self.request.data.get("reviewer_id", []))
 
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -102,12 +78,6 @@ class TaskView(viewsets.ModelViewSet):
             self.create_profiles(assignees, task, "assignee")
             self.create_profiles(reviewers, task, "reviewer")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except NotFound:
-            return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
-        except AuthenticationFailed:
-            return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
-        except PermissionDenied:
-            return Response({"error": f"Forbidden. User shoud be a member of this Board"}, status=status.HTTP_403_FORBIDDEN)
         except ValidationError:
             return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -120,27 +90,14 @@ class TaskView(viewsets.ModelViewSet):
             task = Task.objects.filter(pk=instance.pk)
             board_id = task[0].board.pk
             board = Board.objects.get(pk=board_id)
-            assignees = self.get_profiles(
-                board, board_id, self.request.data.get("assignee_id", []))
-            reviewers = self.get_profiles(
-                board, board_id, self.request.data.get("reviewer_id", []))
-            serializer = self.get_serializer(
-                instance, data=request.data, partial=partial, context={"request": request})
+            assignees, reviewers = (self.get_profiles(board, board_id, self.request.data.get("assignee_id", [])), self.get_profiles(board, board_id, self.request.data.get("reviewer_id", [])))
+            serializer = self.get_serializer(instance, data=request.data, partial=partial, context={"request": request})
             serializer.is_valid(raise_exception=True)
             task = serializer.save()
-            task.assignee.clear()
-            task.reviewer.clear()
+            clear_profiles = task.assignee.clear() and task.reviewer.clear()
             self.create_profiles(assignees, task, "assignee")
             self.create_profiles(reviewers, task, "reviewer")
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except Task.DoesNotExist:
-            return Response({"error": "Task does not exist!"}, status=status.HTTP_404_NOT_FOUND)
-        except NotFound:
-            return Response({"error": "Profil was not found"}, status=status.HTTP_404_NOT_FOUND)
-        except AuthenticationFailed:
-            return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
-        except PermissionDenied:
-            return Response({"error": "Forbidden. User shoud be a member of this Board"}, status=status.HTTP_403_FORBIDDEN)
         except ValidationError:
             return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -149,13 +106,8 @@ class TaskView(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
-            print(instance)
             self.perform_destroy(instance)
             return Response(None, status=status.HTTP_204_NO_CONTENT)
-        except Task.DoesNotExist:
-            return Response({"error": "Task was not found"}, status=status.HTTP_404_NOT_FOUND)
-        except AuthenticationFailed:
-            return Response({"error": "Forbidden. You should be the owner of this board or task!"}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response({"error": f"Internal Server error!{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
