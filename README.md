@@ -24,11 +24,32 @@ cd kanmind_backend
 
 # Create virtual environment
 python -m venv env
-source env/bin/activate  # On Windows: env\Scripts\activate
+source env/bin/activate  # On Windows: "env/Scripts/activate"
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Apply migrations and run the server
+
+### 🔐 Environment Setup
+
+This project uses environment variables for configuration. Create a `.env` file in the project's root directory with the following content:
+
+```bash
+# .env-Datei mit Secret Key erstellen
+echo "SECRET_KEY=Key" > .env
+```
+
+Replace `Key` with the actual secret key value that will be provided to you.
+
+### Database and Static Files Setup
+
+```bash
+# Apply migrations
 python manage.py migrate
+
+# Collect static files
+python manage.py collectstatic
+
+# Run the server
 python manage.py runserver
+```
