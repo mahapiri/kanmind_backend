@@ -28,11 +28,12 @@ source env/bin/activate  # On Windows: "env/Scripts/activate"
 
 # Install dependencies
 pip install -r requirements.txt
-
+```
 
 ### 🔐 Environment Setup
 
-This project uses environment variables for configuration. Create a `.env` file in the project's root directory with the following content:
+This project uses environment variables for configuration. Create a `.env` 
+file in the project's root directory with the following content:
 
 ```bash
 # .env-Datei mit Secret Key erstellen
@@ -41,7 +42,7 @@ echo "SECRET_KEY=Key" > .env
 
 Replace `Key` with the actual secret key value that will be provided to you.
 
-### Database and Static Files Setup
+### 🛢️ Database and Static Files Setup
 
 ```bash
 # Apply migrations
