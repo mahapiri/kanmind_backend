@@ -37,10 +37,10 @@ file in the project's root directory with the following content:
 
 ```bash
 # .env-Datei mit Secret Key erstellen
-echo "SECRET_KEY=Key" > .env
+echo SECRET_KEY="Key" > .env
 ```
 
-Replace `Key` with the actual secret key value that will be provided to you.
+Replace "Key" with the actual secret key value that will be provided to you.
 
 ### 🛢️ Database and Static Files Setup
 
@@ -48,9 +48,33 @@ Replace `Key` with the actual secret key value that will be provided to you.
 # Apply migrations
 python manage.py migrate
 
-# Collect static files
-python manage.py collectstatic
-
 # Run the server
 python manage.py runserver
+```
+
+### 👑 Admin Access Setup
+
+Once the project is running, you can register as an admin user to access the Django admin interface:
+
+1. Create a superuser account:
+```bash
+python manage.py createsuperuser
+```
+
+2. Follow the prompts to enter your username, email, and password.
+
+3. Access the admin interface by navigating to:
+```
+http://localhost:8000/admin/
+```
+
+4. Log in with the superuser credentials you just created.
+
+---
+
+## 🚀 API Documentation
+
+API documentation is available once the server is running at:
+```
+http://localhost:8000/api/schema/redoc/
 ```
