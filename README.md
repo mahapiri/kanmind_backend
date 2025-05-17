@@ -65,7 +65,7 @@ python manage.py createsuperuser
 
 3. Access the admin interface by navigating to:
 ```
-http://localhost:8000/admin/
+http://127.0.0.1:8000/admin/
 ```
 
 4. Log in with the superuser credentials you just created.
