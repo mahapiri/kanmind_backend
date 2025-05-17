@@ -165,7 +165,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'KanMind API',
     'DESCRIPTION': 'KanMind Backend is a RESTful API built with Django and Django REST Framework (DRF)',
-    'VERSION': '1.0.0',
+    'VERSION': '1.0',
     'SERVE_INCLUDE_SCHEMA': False,
     
     'TAGS': [

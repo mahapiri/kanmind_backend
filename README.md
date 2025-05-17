@@ -36,7 +36,7 @@ This project uses environment variables for configuration. Create a `.env`
 file in the project's root directory with the following content:
 
 ```bash
-# .env-Datei mit Secret Key erstellen
+# Create .env-file with Secret_Key
 echo SECRET_KEY="Key" > .env
 ```
 
