@@ -5,7 +5,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, status
 from rest_framework import viewsets
 from rest_framework.authtoken.models import Token
-from rest_framework.exceptions import AuthenticationFailed, NotFound
+from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied
 from rest_framework.fields import ObjectDoesNotExist
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -172,10 +172,10 @@ class BoardDetailView(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except NotFound:
             return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
-        except AuthenticationFailed:
+        except PermissionDenied:
             return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
         except Exception:
-            return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_object(self):
         """
@@ -224,6 +224,8 @@ class BoardDetailView(viewsets.ModelViewSet):
                 return Response(updated_serializer.data, status=status.HTTP_200_OK)
         except NotFound:
             return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied:
+            return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response({"error": f"Internal Server error!{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -287,6 +289,8 @@ class BoardDetailView(viewsets.ModelViewSet):
             return Response(None, status=status.HTTP_204_NO_CONTENT)
         except NotFound:
             return Response({"error": "Board was not found"}, status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied:
+            return Response({"error": "Forbidden. You should be the owner or member of this board!"}, status=status.HTTP_403_FORBIDDEN)
         except Exception:
             return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -5,6 +5,7 @@ from django.core.validators import validate_email
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -35,9 +36,8 @@ class ProfilRegistrationView(generics.CreateAPIView):
     )
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        self.validate_serializer(serializer)
-
         try:
+            self.validate_serializer(serializer)
             user = self.create_user(serializer.validated_data)
             profile = self.create_profile(user, serializer.validated_data)
 
@@ -45,15 +45,17 @@ class ProfilRegistrationView(generics.CreateAPIView):
             response_data = self.create_response_data(token, profile, user)
             response_serializer = ProfilResponseSerializer(response_data)
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": f"An internal server error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValidationError:
+            return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "An internal server error occurred!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def validate_serializer(self, serializer):
         """
         Validate the registration data.
         """
         if not serializer.is_valid():
-            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError()
 
     def create_user(self, validated_data):
         """
@@ -67,7 +69,7 @@ class ProfilRegistrationView(generics.CreateAPIView):
             )
             return created_user
         except Exception:
-            return Response({"error": "Failure to create the new user."}, status=status.HTTP_400_BAD_REQUEST)
+            raise Exception()
 
     def create_profile(self, user, validated_data):
         """
@@ -80,7 +82,8 @@ class ProfilRegistrationView(generics.CreateAPIView):
             )
             return new_profile
         except Exception:
-            return Response({"error": "Failure to create the new user."}, status=status.HTTP_400_BAD_REQUEST)
+            user.delete()
+            raise Exception()
 
     def create_response_data(self, token, profile, user):
         """
