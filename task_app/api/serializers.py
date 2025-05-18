@@ -43,7 +43,10 @@ class TaskSerializer(serializers.ModelSerializer):
             else:
                 result.append(
                     {"id": assignee.id, "email": assignee.user.email, "fullname": assignee.fullname})
-        return result
+        if len(result) == 1:
+            return result[0]
+        else: 
+            return result
 
     def get_reviewer(self, obj):
         """
@@ -61,7 +64,10 @@ class TaskSerializer(serializers.ModelSerializer):
             else:
                 result.append(
                     {"id": reviewer.id, "email": reviewer.user.email, "fullname": reviewer.fullname})
-        return result
+        if len(result) == 1:
+            return result[0]
+        else: 
+            return result
 
 
 class CommentSerializer(serializers.ModelSerializer):

@@ -80,10 +80,11 @@ class BoardListView(generics.ListAPIView):
     def post(self, request):
         data = request.data.copy()
         data = self.validate_members(data)
-        serializer = self.get_serializer(
-            data=data, context={"request": request})
         user_id = self.get_user_from_token(request)
         profile = Profile.objects.filter(user_id=user_id).first()
+        updated_data = self.set_owner_to_member_list(profile.id, data)
+        serializer = self.get_serializer(
+            data=updated_data, context={"request": request})
         if not profile:
             return Response({"error": "No profile found for the user."}, status=status.HTTP_400_BAD_REQUEST)
         if serializer.is_valid():
@@ -116,6 +117,11 @@ class BoardListView(generics.ListAPIView):
         elif members is None:
             data["members"] = []
         return data
+    
+    def set_owner_to_member_list(self, user_id, data):
+        data["members"].append(user_id)
+        return data
+
 
 
 class BoardDetailView(viewsets.ModelViewSet):
@@ -249,13 +255,11 @@ class BoardDetailView(viewsets.ModelViewSet):
         valid_members = []
         invalid_members = []
         if members_data is not None:
+            owner_data = valid_members.append(board.owner.id)
             for member_id in members_data:
                 try:
                     profile = Profile.objects.get(id=member_id)
-                    if profile != board.owner:
-                        valid_members.append(profile)
-                    else:
-                        invalid_members.append(member_id)
+                    valid_members.append(profile)
                 except ObjectDoesNotExist:
                     invalid_members.append(member_id)
         else: 

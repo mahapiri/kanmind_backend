@@ -44,12 +44,11 @@ class BoardWriteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """
         Create a new board with the provided owner and members.
-        Ensures the owner is not duplicated in the members list.
         """
         owner = validated_data.pop("owner", None)
         members = validated_data.pop("members", [])
         filtered_members = [
-            member for member in members if member.id != owner.id]
+            member for member in members]
         try:
             board = Board.objects.create(owner=owner, **validated_data)
             board.members.set(filtered_members)
@@ -89,12 +88,12 @@ class BoardSerializer(serializers.ModelSerializer):
     def get_tasks(self, obj):
         """
         Get serialized data for all tasks on the board.
-        Returns None if there are no tasks.
+        Returns empty array if there are no tasks.
         """
         if obj.task.exists():
             return TaskSerializer(obj.task.all(), many=True).data
         else:
-            return None
+            return []
 
 
 class BoardUpdateSerializer(serializers.ModelSerializer):

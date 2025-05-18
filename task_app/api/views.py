@@ -128,6 +128,7 @@ class TaskView(viewsets.ModelViewSet):
         board_id = request.data.get("board")
         try:
             board = Board.objects.get(pk=board_id)
+            print(board)
             assignees = self.get_profiles(board, board_id, self.request.data.get("assignee_id", []))
             reviewers = self.get_profiles(board, board_id, self.request.data.get("reviewer_id", []))
 
@@ -140,8 +141,10 @@ class TaskView(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except ValidationError:
             return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
-            return Response({"error": "Internal Server error!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except PermissionDenied as e:
+            return Response({"error": f"{e}"}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({"error": f"Internal Server error!{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(
         summary="Update a task",
@@ -157,16 +160,18 @@ class TaskView(viewsets.ModelViewSet):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
         try:
-            task = Task.objects.filter(pk=instance.pk)
-            board_id = task[0].board.pk
+            task = Task.objects.get(pk=instance.pk)
+            board_id = task.board.pk
             board = Board.objects.get(pk=board_id)
-            assignees, reviewers = (self.get_profiles(board, board_id, self.request.data.get("assignee_id", [])), self.get_profiles(board, board_id, self.request.data.get("reviewer_id", [])))
+            assignee_ids = self.get_profiles(board, board_id, request.data.get("assignee_id", []))
+            reviewer_ids = self.get_profiles(board, board_id, request.data.get("reviewer_id", []))
+            task.assignee.clear()
+            task.reviewer.clear()
             serializer = self.get_serializer(instance, data=request.data, partial=partial, context={"request": request})
             serializer.is_valid(raise_exception=True)
-            task = serializer.save()
-            clear_profiles = task.assignee.clear() and task.reviewer.clear()
-            self.create_profiles(assignees, task, "assignee")
-            self.create_profiles(reviewers, task, "reviewer")
+            updated_task = serializer.save()
+            self.create_profiles(assignee_ids, updated_task, "assignee")
+            self.create_profiles(reviewer_ids, updated_task, "reviewer")
             return Response(serializer.data, status=status.HTTP_200_OK)
         except ValidationError:
             return Response({"error": "Invalid request data"}, status=status.HTTP_400_BAD_REQUEST)
@@ -199,18 +204,6 @@ class TaskView(viewsets.ModelViewSet):
     def get_profiles(self, board, board_id, profile_ids):
         """
         Validate that profile IDs belong to board members.
-
-        Args:
-            board: Board object
-            board_id: ID of the board
-            profile_ids: List of profile IDs or single profile ID
-
-        Returns:
-            list: Validated list of profile IDs
-
-        Raises:
-            PermissionDenied: If a profile is not a board member
-            NotFound: If a profile does not exist
         """
         if profile_ids and not isinstance(profile_ids, list):
             profile_ids = [profile_ids]
@@ -222,7 +215,7 @@ class TaskView(viewsets.ModelViewSet):
                 is_board_member = board.owner == profile or profile.board_members.filter(
                     id=board_id).exists()
                 if not is_board_member:
-                    raise PermissionDenied("You are not a board member")
+                    raise PermissionDenied(f"{profile.fullname} is not a board member")
             except Profile.DoesNotExist:
                 raise NotFound("Profile was not found.")
         return profile_ids
@@ -230,25 +223,19 @@ class TaskView(viewsets.ModelViewSet):
     def create_profiles(self, profile_ids, task, field):
         """
         Add profiles to task as assignees or reviewers.
-
-        Args:
-            profile_ids: List of profile IDs
-            task: Task object
-            field: Either "reviewer" or "assignee"
-
-        Raises:
-            NotFound: If a profile does not exist
         """
+        profiles = []
         for profile_id in profile_ids:
             try:
                 profile = Profile.objects.get(id=profile_id)
-                if field == "reviewer":
-                    task.reviewer.add(profile)
-                elif field == "assignee":
-                    task.assignee.add(profile)
+                profiles.append(profile)
             except Profile.DoesNotExist:
                 raise NotFound("Profile was not found.")
-
+        if field == "reviewer":
+            task.reviewer.set(profiles)
+        elif field == "assignee":
+            task.assignee.set(profiles)
+        return profiles
 
 class CommentListView(viewsets.ModelViewSet):
     """
